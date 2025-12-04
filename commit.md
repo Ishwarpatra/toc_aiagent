@@ -53,3 +53,53 @@ Unit Tests: Passed (6/6 scenarios covered) in test_core_logic.py.
 End-to-End Tests: Validated against "starts with b", "starts with bb", and "contains aba".
 
 Visuals: Graphs are now clean, deterministic, and free of hallucinated edges.
+
+Commit: Feature: Add DFA Inversion, Optimization, and Robustness Fixes
+
+Author: Iswar patra
+
+Date: Dec 4, 2025
+
+Summary
+
+This update introduces new theoretical operations and performance monitoring tools while addressing critical stability issues in the random generation and repair pipelines. The system can now generate the complement of a language and automatically handle dead state edge cases during repair, ensuring smoother execution for complex automata.
+
+Key Architectural Changes
+
+New Feature: DFA Inversion (invert_dfa)
+
+Added: Implemented the invert_dfa function to construct the complement of a DFA.
+
+Logic: Swaps accepting states with non-accepting states while preserving existing transitions.
+
+Utility: Essential for verifying negative constraints by inverting the positive case logic.
+
+Performance Monitoring
+
+Added: A custom execution_timer decorator to track performance.
+
+Usage: Wrapped computationally heavy functions like simulation and auto-repair to track execution time.
+
+Benefit: Allows for profiling the Architect and Validator phases to identify specific bottlenecks.
+
+Fix: Random DFA Generation
+
+Issue: Previous logic occasionally created disconnected graphs or invalid transition maps.
+
+Resolution: Enforced reachability checks from the start state and ensured every state has a complete set of transitions for the alphabet.
+
+Enhancement: Auto-Repair Dead States
+
+Context: The auto-repair function previously failed when encountering trap scenarios.
+
+Improvement: Explicitly detects missing transitions and routes them to a designated q_dead state, treating it as a non-accepting sink that loops on all inputs.
+
+Verification
+
+Unit Tests: Added tests for invert_dfa ensuring the complement logic holds true.
+
+Regression: Confirmed auto_repair_dfa no longer throws errors on partial transition tables.
+
+End-to-End Tests: Validated that dead states are correctly attached during the repair process.
+
+Visuals: Graphs correctly display trap states when necessary.
