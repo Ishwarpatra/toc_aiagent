@@ -1,10 +1,16 @@
-Commit Description: Deterministic Validator & Auto-Repair Overhaul
+Commit Record
 
-🚀 Summary
+Commit: Refactor: Replace AI Validator with Deterministic Engine
 
-Refactored the validation architecture to replace the LLM-based "Agent 3" with a pure Python deterministic engine (validator.py). This eliminates hallucinations where the validator would incorrectly flag valid DFAs. Additionally, the Auto-Repair engine has been significantly hardened to handle multi-character patterns (e.g., "starts with bb") and prevent graph corruption ("spaghetti graphs").
+Author: Iswar patra
 
-🛠 Key Architectural Changes
+Date: Dec 3, 2025
+
+Summary
+
+Refactored the validation architecture to replace the LLM-based "Agent 3" with a pure Python deterministic engine (validator.py). This eliminates hallucinations where the validator would incorrectly flag valid DFAs. Additionally, the Auto-Repair engine has been significantly hardened to handle multi-character patterns (e.g., "starts with bb") and prevent graph corruption.
+
+ Key Architectural Changes
 
 1. New Validator Engine (validator.py)
 
@@ -28,21 +34,21 @@ Old Behavior: Agent 1 outputted free text summaries.
 
 New Behavior: Agent 1 outputs a strict LogicSpec JSON object (e.g., {"logic_type": "STARTS_WITH", "target": "bb"}).
 
-Benefit: This provides the exact variables needed for the deterministic chain builder.
+Benefit: Provides exact variables needed for the deterministic chain builder.
 
 3. "Scorched Earth" Auto-Repair
 
 The Auto-Repair engine in main.py received three critical upgrades:
 
-Chain Builder: Instead of patching single transitions, it now constructs full state chains for targets longer than 1 character (e.g., q0 -> q1 -> q2 for "bb").
+Chain Builder: Constructs full state chains for targets longer than 1 character (e.g., q0 -> q1 -> q2 for "bb").
 
-Alphabet Lockdown: Forces the alphabet to ['a', 'b'] and actively deletes hallucinated transitions (e.g., c, d) to prevent messy visualizations.
+Alphabet Lockdown: Forces the alphabet to ['a', 'b'] and actively deletes hallucinated transitions (e.g., c, d).
 
 Start State Enforcement: Hard-overwrites any transitions leaving the start state to ensure immediate rejection of invalid inputs.
 
-Verification
+4. Verification
 
-Unit Tests: Passed (6/6 scenarios covered).
+Unit Tests: Passed (6/6 scenarios covered) in test_core_logic.py.
 
 End-to-End Tests: Validated against "starts with b", "starts with bb", and "contains aba".
 

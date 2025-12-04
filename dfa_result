@@ -3,13 +3,10 @@ digraph {
 	rankdir=LR
 	start_ptr [label="" shape=none]
 	start_ptr -> q0
-	q0 [label=q0 shape=doublecircle]
+	q0 [label=q0 shape=circle]
 	q1 [label=q1 shape=doublecircle]
-	q_dead [label=q_dead shape=circle]
-	q0 -> q1 [label=a]
-	q0 -> q_dead [label=b]
-	q_dead -> q_dead [label=a]
-	q_dead -> q_dead [label=b]
+	q0 -> q1 [label=b]
+	q0 -> q0 [label=a]
 	q1 -> q1 [label=a]
 	q1 -> q1 [label=b]
 }

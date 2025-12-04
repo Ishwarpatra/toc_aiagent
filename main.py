@@ -2,6 +2,8 @@ import ollama
 import json
 import os
 import re
+import time
+from typing import Optional 
 from validator import DeterministicValidator, LogicSpec, DFA
 
 # --- Configuration ---
@@ -47,7 +49,7 @@ class DFAGeneratorSystem:
         system_prompt = (
             "You are a Parameter Extractor. Your job is to convert natural language into variables.\n"
             "Supported Types:\n"
-            "- STARTS_WITH (e.g. 'starts with b', 'begin with bb')\n"
+            "- STARTS_WITH (e.g. 'starts with b')\n"
             "- NOT_STARTS_WITH (e.g. 'does not start with b')\n"
             "- ENDS_WITH (e.g. 'ending in aba')\n"
             "- NOT_ENDS_WITH (e.g. 'not ending in a')\n"
@@ -105,7 +107,7 @@ class DFAGeneratorSystem:
             print(f"   -> Architect Failed: {e}")
             raise e
 
-    # --- AUTO-REPAIR ENGINE (CHAIN BUILDER UPGRADE) ---
+    # --- AUTO-REPAIR ENGINE ---
     def _auto_repair_dfa(self, data: dict, spec: LogicSpec) -> DFA:
         states = set(data.get('states', []))
         transitions = data.get('transitions', {})
@@ -129,68 +131,128 @@ class DFAGeneratorSystem:
         type_str = spec.logic_type
         target = spec.target
 
-        # --- SPECIAL HANDLER: STARTS_WITH CHAIN BUILDER ---
-        # Instead of patching, we BUILD the correct chain for the target string.
-        # This fixes the "bb" vs "b" issue by creating q0 -> q1 -> q2.
+        # --- SPECIAL HANDLER: STARTS_WITH CHAIN ---
         if type_str == "STARTS_WITH" and target:
             print(f"   [Auto-Repair] Rebuilding Chain for STARTS_WITH '{target}'")
-            
-            # Ensure we have enough states (q0, q1, q2... for len(target))
-            # If target is 'bb' (len 2), we need 3 states: Start(0), Partial(1), Accept(2)
             required_states = [start_state]
             for i in range(len(target)):
                 st_name = f"q{i+1}"
                 if st_name not in clean_states: clean_states.append(st_name)
                 required_states.append(st_name)
             
-            # The last state in the chain is the ONLY Accept state
             final_state = required_states[-1]
             accept_states = {final_state}
             
-            # Build the Chain
             for i, current_st in enumerate(required_states[:-1]):
                 char_to_match = target[i]
                 next_st = required_states[i+1]
                 
+                # FORCE OVERWRITE
                 if current_st not in transitions: transitions[current_st] = {}
-                
-                # Correct Path
                 transitions[current_st][char_to_match] = next_st
                 
-                # Incorrect Paths (All other chars go to Dead)
                 for char in alphabet:
-                    if char != char_to_match:
+                    if char != char_to_match: 
                         transitions[current_st][char] = "q_dead"
 
-            # Latch the Final State (Loop forever on everything)
             if final_state not in transitions: transitions[final_state] = {}
             transitions[final_state] = {s: final_state for s in alphabet}
 
-        # --- SPECIAL HANDLER: NOT_STARTS_WITH ---
+        # --- SPECIAL HANDLER: NOT_STARTS_WITH CHAIN ---
         elif type_str == "NOT_STARTS_WITH" and target:
-            # Simple case: First char match -> Dead. Others -> Safe (Latch Accept)
-            first_char = target[0]
-            if start_state not in transitions: transitions[start_state] = {}
+            print(f"   [Auto-Repair] Rebuilding Negative Chain for NOT_STARTS_WITH '{target}'")
             
-            for char in alphabet:
-                if char == first_char:
-                    transitions[start_state][char] = "q_dead"
+            chain_states = [start_state]
+            for i in range(len(target)):
+                st_name = f"q{i+1}"
+                if st_name not in clean_states: clean_states.append(st_name)
+                chain_states.append(st_name)
+            
+            safe_state = "q_safe"
+            if safe_state not in clean_states: clean_states.append(safe_state)
+            if safe_state not in transitions: transitions[safe_state] = {}
+            transitions[safe_state] = {s: safe_state for s in alphabet}
+            
+            accept_states = set(chain_states[:-1])
+            accept_states.add(safe_state)
+            
+            for i, current_st in enumerate(chain_states[:-1]):
+                bad_char = target[i]
+                
+                if current_st not in transitions: transitions[current_st] = {}
+                
+                if i == len(target) - 1:
+                    transitions[current_st][bad_char] = "q_dead"
                 else:
-                    # If we start with something else, we are safe forever.
-                    # Create a generic accept state 'q_safe'
-                    safe = "q1"
-                    if safe not in clean_states: clean_states.append(safe)
-                    if safe not in transitions: transitions[safe] = {}
-                    
-                    transitions[start_state][char] = safe
-                    transitions[safe] = {s: safe for s in alphabet}
-                    accept_states.add(safe)
-            
-            # Empty string logic?
-            # "Not starts with b": Empty string technically doesn't start with b.
-            accept_states.add(start_state)
+                    transitions[current_st][bad_char] = chain_states[i+1]
+                
+                for char in alphabet:
+                    if char != bad_char:
+                        transitions[current_st][char] = safe_state
 
-        # --- GENERAL REPAIR (For Contains / Ends With) ---
+        # --- SPECIAL HANDLER: CONTAINS CHAIN ---
+        elif type_str == "CONTAINS" and target:
+            print(f"   [Auto-Repair] Rebuilding Chain for CONTAINS '{target}'")
+            
+            chain_states = [start_state]
+            for i in range(len(target)):
+                st_name = f"q{i+1}"
+                if st_name not in clean_states: clean_states.append(st_name)
+                chain_states.append(st_name)
+            
+            final_state = chain_states[-1]
+            accept_states = {final_state}
+            
+            for i, current_st in enumerate(chain_states[:-1]):
+                match_char = target[i]
+                next_st = chain_states[i+1]
+                
+                transitions[current_st] = {}
+                transitions[current_st][match_char] = next_st
+                
+                for char in alphabet:
+                    if char != match_char:
+                        transitions[current_st][char] = start_state
+
+            if final_state not in transitions: transitions[final_state] = {}
+            transitions[final_state] = {s: final_state for s in alphabet}
+
+        # --- SPECIAL HANDLER: ENDS_WITH & NOT_ENDS_WITH ---
+        elif (type_str == "ENDS_WITH" or type_str == "NOT_ENDS_WITH") and target:
+            print(f"   [Auto-Repair] Rebuilding Suffix Automaton for {type_str} '{target}'")
+            
+            # 1. Create states q0..qN (where N = len(target))
+            chain_states = [start_state]
+            for i in range(len(target)):
+                st_name = f"q{i+1}"
+                if st_name not in clean_states: clean_states.append(st_name)
+                chain_states.append(st_name)
+            
+            # 2. Determine Transitions (KMP/Suffix Logic)
+            for i, current_st in enumerate(chain_states):
+                current_prefix = target[:i]
+                if current_st not in transitions: transitions[current_st] = {}
+                
+                for char in alphabet:
+                    # Calculate next state: longest prefix of target that is suffix of (current_prefix + char)
+                    candidate = current_prefix + char
+                    # Trim candidate until it matches a prefix of target
+                    while len(candidate) > 0 and not target.startswith(candidate):
+                        candidate = candidate[1:]
+                    
+                    next_index = len(candidate)
+                    next_st_name = chain_states[next_index]
+                    transitions[current_st][char] = next_st_name
+
+            # 3. Set Accept States
+            if type_str == "ENDS_WITH":
+                # Only the final state is accept
+                accept_states = {chain_states[-1]}
+            else:
+                # NOT_ENDS_WITH: All states EXCEPT the final one are accept
+                accept_states = set(chain_states[:-1])
+
+        # --- GENERAL REPAIR (FALLBACK) ---
         else:
             for state in clean_states:
                 if state not in transitions: transitions[state] = {}
@@ -203,11 +265,53 @@ class DFAGeneratorSystem:
                         else:
                             transitions[state][symbol] = start_state
 
-        data['states'] = sorted(list(clean_states))
-        data['transitions'] = transitions
+        # --- PHASE 4: CLEANUP ---
+        reachable = {start_state}
+        queue = [start_state]
+        
+        while queue:
+            curr = queue.pop(0)
+            if curr in transitions:
+                for next_st in transitions[curr].values():
+                    if next_st not in reachable:
+                        reachable.add(next_st)
+                        queue.append(next_st)
+        
+        clean_states = [s for s in clean_states if s in reachable]
+        final_accept = [s for s in accept_states if s in reachable]
+        
+        final_transitions = {}
+        for s in clean_states:
+            if s in transitions:
+                final_transitions[s] = transitions[s]
+
+        data['states'] = sorted(clean_states)
+        data['transitions'] = final_transitions
         data['start_state'] = start_state
-        data['accept_states'] = list(accept_states)
+        data['accept_states'] = sorted(final_accept)
         return DFA(**data)
+
+    # --- HELPER: LOGIC INVERTER ---
+    def _try_inversion_fix(self, dfa: DFA, spec: LogicSpec) -> Optional[DFA]:
+        all_states = set(dfa.states)
+        current_accept = set(dfa.accept_states)
+        new_accept = list(all_states - current_accept)
+        
+        inverted_dfa = DFA(
+            states=dfa.states,
+            alphabet=dfa.alphabet,
+            transitions=dfa.transitions,
+            start_state=dfa.start_state,
+            accept_states=new_accept,
+            reasoning=dfa.reasoning + " (Auto-Inverted by System)"
+        )
+        
+        print("   [System] Checking Inverted Logic...")
+        is_valid, _ = self.validator.validate(inverted_dfa, spec)
+        
+        if is_valid:
+            return inverted_dfa
+        return None
 
     # --- VISUALIZER ---
     def visualizer_tool(self, dfa: DFA):
@@ -233,23 +337,72 @@ class DFAGeneratorSystem:
 
     # --- MAIN LOOP ---
     def run(self, user_query):
+        start_time = time.time()  # <--- TIMER START
+        
         spec = self.agent_1_analyst(user_query)
         feedback = ""
+        
         for i in range(self.max_retries):
             dfa_obj = self.agent_2_architect(spec, feedback)
             is_valid, error_msg = self.validator.validate(dfa_obj, spec)
             
             if is_valid:
                 self.visualizer_tool(dfa_obj)
+                
+                # --- TIMER END (Success) ---
+                end_time = time.time()
+                elapsed = end_time - start_time
                 print("\n--- SUCCESS ---")
+                print(f"[Performance] Task completed in {elapsed:.4f} seconds.")
                 return
-            else:
-                feedback = error_msg
-                print(f">>> Retry {i+1}/{self.max_retries}...")
+            
+            print("   [System] Validation Failed. Attempting Logic Inversion...")
+            inverted_dfa = self._try_inversion_fix(dfa_obj, spec)
+            
+            if inverted_dfa:
+                print("\n   [Auto-Repair] INVERSION TRIGGERED: Swapping Accept/Reject states fixed the logic!")
+                self.visualizer_tool(inverted_dfa)
+                
+                # --- TIMER END (Inversion Success) ---
+                end_time = time.time()
+                elapsed = end_time - start_time
+                print("\n--- SUCCESS (Via Inversion) ---")
+                print(f"[Performance] Task completed in {elapsed:.4f} seconds.")
+                return
+
+            feedback = error_msg
+            print(f">>> Retry {i+1}/{self.max_retries}...")
+        
+        # --- TIMER END (Failure) ---
+        end_time = time.time()
+        elapsed = end_time - start_time
         print("\n--- FAILED ---")
+        print(f"[Performance] Task failed after {elapsed:.4f} seconds.")
 
 if __name__ == "__main__":
     system = DFAGeneratorSystem()
-    query = "Design a DFA that accepts strings not starting with 'bb'"
-    print(f"\n>>> Running Challenge: {query}")
-    system.run(query)
+    
+    # --- Batch Challenge Suite ---
+    queries = [
+        "Design a DFA that accepts strings starting with 'b'",
+        "Design a DFA that accepts strings starting with 'bb'",
+        "Design a DFA that accepts strings not starting with 'bb'",
+        "Design a DFA that accepts strings ending with 'ab'",
+        "Design a DFA that accepts strings not ending with 'a'",
+        "Design a DFA that accepts strings that contains 'b'",
+        "Design a DFA that accepts strings that does not contain 'aa'"
+    ]
+
+    print(f"Starting Batch Execution of {len(queries)} challenges...\n")
+
+    for i, query in enumerate(queries, 1):
+        print(f"\n{'='*50}")
+        print(f"TEST CASE {i}: {query}")
+        print(f"{'='*50}")
+        
+        try:
+            system.run(query)
+        except Exception as e:
+            print(f"!!! CRASH IN TEST {i}: {e}")
+            
+    print("\n=== Batch Execution Complete ===")
