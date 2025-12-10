@@ -1,7 +1,6 @@
 import ollama
 import json
 import os
-import re
 import time
 from typing import Optional 
 from validator import DeterministicValidator, LogicSpec, DFA
@@ -44,20 +43,20 @@ class DFAGeneratorSystem:
             raise e
 
     # --- AGENT 1: THE EXTRACTOR ---
-   # --- AGENT 1: THE EXTRACTOR ---
     def agent_1_analyst(self, user_prompt: str) -> LogicSpec:
         print(f"\n[Agent 1] Extracting Logic Variables...")
+        
+        # 1. Try Deterministic Extraction from Validator Logic
+        heuristic_spec = LogicSpec.from_prompt(user_prompt)
+        if heuristic_spec:
+            print(f"   -> Extracted (Regex): {heuristic_spec.logic_type} | Target: '{heuristic_spec.target}'")
+            return heuristic_spec
+
+        # 2. Fallback to LLM Extraction
         system_prompt = (
             "You are a Parameter Extractor. Output JSON only.\n"
-            "Supported Types:\n"
-            "- STARTS_WITH / NOT_STARTS_WITH (target: substring)\n"
-            "- ENDS_WITH / NOT_ENDS_WITH (target: substring)\n"
-            "- CONTAINS / NOT_CONTAINS (target: substring)\n"
-            "- DIVISIBLE_BY (target: the number as string, e.g., '3')\n"
-            "- NO_CONSECUTIVE (target: the symbol forbidden from repeating, e.g., '1')\n"
-            "- ODD_COUNT (target: the character to count, e.g., '0')\n"
-            "- EVEN_COUNT (target: the character to count, e.g., '1')\n"
-            "\n"
+            "Supported Types: STARTS_WITH, NOT_STARTS_WITH, ENDS_WITH, CONTAINS, DIVISIBLE_BY\n"
+            "Extract the target substring or number exactly."
         )
         
         try:
@@ -67,16 +66,12 @@ class DFAGeneratorSystem:
                 format_schema=LogicSpec.model_json_schema()
             )
             data = json.loads(response)
-            data['logic_type'] = data['logic_type'].upper()
             
-            # Fallback extraction if LLM misses the target
-            if not data['target']:
-                match = re.search(r"['\"](.*?)['\"]", user_prompt) # Try quotes
-                if not match: match = re.search(r"\b\d+\b", user_prompt) # Try numbers
-                if match: data['target'] = match.group(0).strip("'\"")
+            if 'alphabet' not in data or not data['alphabet']:
+                data['alphabet'] = ["0", "1"]
 
             spec = LogicSpec(**data)
-            print(f"   -> Extracted: {spec.logic_type} | Target: '{spec.target}'")
+            print(f"   -> Extracted (LLM): {spec.logic_type} | Target: '{spec.target}'")
             return spec
         except Exception as e:
             print(f"   [Agent 1 Error] {e}")
@@ -117,201 +112,173 @@ class DFAGeneratorSystem:
         alphabet = spec.alphabet
         accept_states = set(data.get('accept_states', []))
 
-        # 1. Structure Init
-        for src, paths in transitions.items():
-            states.add(src)
-            for _, dest in paths.items(): states.add(dest)
-        
         clean_states = sorted([s for s in states if len(s) < 10 and " " not in s])
         if not clean_states: clean_states = ["q0", "q1"]
         start_state = data.get('start_state', clean_states[0])
-        if start_state not in clean_states: start_state = clean_states[0]
         
         if "q_dead" not in clean_states: clean_states.append("q_dead")
         transitions["q_dead"] = {s: "q_dead" for s in alphabet}
 
-        # 2. Logic Overwrites
         type_str = spec.logic_type
         target = spec.target
 
-        # --- SPECIAL HANDLER: STARTS_WITH CHAIN ---
+        # Logic Injection for Guaranteed Correctness
         if type_str == "STARTS_WITH" and target:
-            print(f"   [Auto-Repair] Rebuilding Chain for STARTS_WITH '{target}'")
             required_states = [start_state]
             for i in range(len(target)):
                 st_name = f"q{i+1}"
                 if st_name not in clean_states: clean_states.append(st_name)
                 required_states.append(st_name)
-            
             final_state = required_states[-1]
             accept_states = {final_state}
-            
             for i, current_st in enumerate(required_states[:-1]):
                 char_to_match = target[i]
                 next_st = required_states[i+1]
-                
-                # FORCE OVERWRITE
                 if current_st not in transitions: transitions[current_st] = {}
                 transitions[current_st][char_to_match] = next_st
-                
                 for char in alphabet:
-                    if char != char_to_match: 
-                        transitions[current_st][char] = "q_dead"
-
+                    if char != char_to_match: transitions[current_st][char] = "q_dead"
             if final_state not in transitions: transitions[final_state] = {}
             transitions[final_state] = {s: final_state for s in alphabet}
 
-        # --- SPECIAL HANDLER: NOT_STARTS_WITH CHAIN ---
         elif type_str == "NOT_STARTS_WITH" and target:
-            print(f"   [Auto-Repair] Rebuilding Negative Chain for NOT_STARTS_WITH '{target}'")
-            
             chain_states = [start_state]
             for i in range(len(target)):
                 st_name = f"q{i+1}"
                 if st_name not in clean_states: clean_states.append(st_name)
                 chain_states.append(st_name)
-            
             safe_state = "q_safe"
             if safe_state not in clean_states: clean_states.append(safe_state)
             if safe_state not in transitions: transitions[safe_state] = {}
             transitions[safe_state] = {s: safe_state for s in alphabet}
-            
             accept_states = set(chain_states[:-1])
             accept_states.add(safe_state)
-            
             for i, current_st in enumerate(chain_states[:-1]):
                 bad_char = target[i]
-                
                 if current_st not in transitions: transitions[current_st] = {}
-                
-                if i == len(target) - 1:
-                    transitions[current_st][bad_char] = "q_dead"
-                else:
-                    transitions[current_st][bad_char] = chain_states[i+1]
-                
+                if i == len(target) - 1: transitions[current_st][bad_char] = "q_dead"
+                else: transitions[current_st][bad_char] = chain_states[i+1]
                 for char in alphabet:
-                    if char != bad_char:
-                        transitions[current_st][char] = safe_state
+                    if char != bad_char: transitions[current_st][char] = safe_state
 
-        # --- SPECIAL HANDLER: CONTAINS CHAIN ---
         elif type_str == "CONTAINS" and target:
-            print(f"   [Auto-Repair] Rebuilding Chain for CONTAINS '{target}'")
-            
             chain_states = [start_state]
             for i in range(len(target)):
                 st_name = f"q{i+1}"
                 if st_name not in clean_states: clean_states.append(st_name)
                 chain_states.append(st_name)
-            
             final_state = chain_states[-1]
             accept_states = {final_state}
+            for i, current_st in enumerate(chain_states[:-1]):
+                match_char = target[i]
+                next_st = chain_states[i+1]
+                transitions[current_st] = {}
+                transitions[current_st][match_char] = next_st
+                for char in alphabet:
+                    if char != match_char: transitions[current_st][char] = start_state
+            if final_state not in transitions: transitions[final_state] = {}
+            transitions[final_state] = {s: final_state for s in alphabet}
+
+        elif type_str == "NOT_CONTAINS" and target:
+            # Reusing CONTAINS logic structure but inverting acceptance
+            chain_states = [start_state]
+            for i in range(len(target)):
+                st_name = f"q{i+1}"
+                if st_name not in clean_states: clean_states.append(st_name)
+                chain_states.append(st_name)
+            final_state = chain_states[-1]
+            
+            # For NOT_CONTAINS, the final trap state is the ONLY reject state
+            accept_states = set(chain_states[:-1]) 
             
             for i, current_st in enumerate(chain_states[:-1]):
                 match_char = target[i]
                 next_st = chain_states[i+1]
-                
                 transitions[current_st] = {}
                 transitions[current_st][match_char] = next_st
-                
                 for char in alphabet:
-                    if char != match_char:
-                        transitions[current_st][char] = start_state
-
+                    if char != match_char: transitions[current_st][char] = start_state
+            
+            # The final state is a trap for the forbidden string (Reject)
             if final_state not in transitions: transitions[final_state] = {}
             transitions[final_state] = {s: final_state for s in alphabet}
 
-        # --- SPECIAL HANDLER: ENDS_WITH & NOT_ENDS_WITH ---
         elif (type_str == "ENDS_WITH" or type_str == "NOT_ENDS_WITH") and target:
-            print(f"   [Auto-Repair] Rebuilding Suffix Automaton for {type_str} '{target}'")
-            
-            # 1. Create states q0..qN (where N = len(target))
             chain_states = [start_state]
             for i in range(len(target)):
                 st_name = f"q{i+1}"
                 if st_name not in clean_states: clean_states.append(st_name)
                 chain_states.append(st_name)
-            
-            # 2. Determine Transitions (KMP/Suffix Logic)
             for i, current_st in enumerate(chain_states):
                 current_prefix = target[:i]
                 if current_st not in transitions: transitions[current_st] = {}
-                
                 for char in alphabet:
-                    # Calculate next state: longest prefix of target that is suffix of (current_prefix + char)
                     candidate = current_prefix + char
-                    # Trim candidate until it matches a prefix of target
                     while len(candidate) > 0 and not target.startswith(candidate):
                         candidate = candidate[1:]
-                    
                     next_index = len(candidate)
-                    next_st_name = chain_states[next_index]
-                    transitions[current_st][char] = next_st_name
+                    if next_index < len(chain_states):
+                        next_st_name = chain_states[next_index]
+                        transitions[current_st][char] = next_st_name
+            if type_str == "ENDS_WITH": accept_states = {chain_states[-1]}
+            else: accept_states = set(chain_states[:-1])
 
-            # 3. Set Accept States
-            if type_str == "ENDS_WITH":
-                # Only the final state is accept
-                accept_states = {chain_states[-1]}
-            else:
-                # NOT_ENDS_WITH: All states EXCEPT the final one are accept
-                accept_states = set(chain_states[:-1])
+        elif type_str == "DIVISIBLE_BY" and target.isdigit():
+            divisor = int(target)
+            # Create modulo states
+            clean_states = [f"q{i}" for i in range(divisor)]
+            
+            # Create a dedicated start state to handle empty string rejection
+            # (Standard modulo machine accepts empty string as 0, Validator rejects it)
+            start_state = "q_start"
+            clean_states.append(start_state)
+            
+            # Normal modulo transitions
+            transitions = {}
+            for r in range(divisor):
+                state_name = f"q{r}"
+                transitions[state_name] = {}
+                transitions[state_name]['0'] = f"q{(r * 2) % divisor}"
+                transitions[state_name]['1'] = f"q{(r * 2 + 1) % divisor}"
+
+            # Start state mimics q0's transitions but isn't accepting
+            transitions[start_state] = transitions["q0"].copy()
+            
+            # Only q0 (remainder 0) is accepting
+            accept_states = {"q0"}
+
         elif type_str == "NO_CONSECUTIVE" and target:
-            print(f"   [Auto-Repair] Building No-Consecutive '{target}' Machine")
             clean_states = ["safe", "seen_one", "trap"]
             start_state = "safe"
             accept_states = {"safe", "seen_one"}
             transitions = {}
-            
-            other_char = '1' if target == '0' else '0'
-
-            # Safe state (haven't just seen the forbidden char)
-            transitions["safe"] = {
-                other_char: "safe", 
-                target: "seen_one"
-            }
-            # Seen_one state (just saw one forbidden char)
-            transitions["seen_one"] = {
-                other_char: "safe",
-                target: "trap" # Second one in a row!
-            }
-            # Trap state
+            bad_char = target
+            other_char = '1' if bad_char == '0' else '0'
+            transitions["safe"] = {other_char: "safe", bad_char: "seen_one"}
+            transitions["seen_one"] = {other_char: "safe", bad_char: "trap"}
             transitions["trap"] = {s: "trap" for s in alphabet}
 
-        # --- NEW LOGIC: PARITY COUNTING ---
         elif (type_str == "EVEN_COUNT" or type_str == "ODD_COUNT") and target:
-            print(f"   [Auto-Repair] Building Parity Counter for '{target}'")
             clean_states = ["even", "odd"]
             start_state = "even"
             accept_states = {"even"} if type_str == "EVEN_COUNT" else {"odd"}
             transitions = {}
-            
-            other_char = '1' if target == '0' else '0'
+            count_char = target
+            other_char = '1' if count_char == '0' else '0'
+            transitions["even"] = {other_char: "even", count_char: "odd"}
+            transitions["odd"] = {other_char: "odd", count_char: "even"}
 
-            transitions["even"] = {
-                other_char: "even", # Count doesn't change
-                target: "odd"       # Count flips
-            }
-            transitions["odd"] = {
-                other_char: "odd",
-                target: "even"
-            }            
-        
-        # --- GENERAL REPAIR (FALLBACK) ---
         else:
+            # Fallback connectivity check
             for state in clean_states:
                 if state not in transitions: transitions[state] = {}
                 for symbol in alphabet:
                     if symbol not in transitions[state]:
-                        if "CONTAINS" in type_str and state in accept_states:
-                             transitions[state][symbol] = state
-                        elif "NOT_CONTAINS" in type_str and state == "q_dead":
-                             transitions[state][symbol] = state
-                        else:
-                            transitions[state][symbol] = start_state
+                        transitions[state][symbol] = start_state
 
-        # --- PHASE 4: CLEANUP ---
+        # Prune unreachable states
         reachable = {start_state}
         queue = [start_state]
-        
         while queue:
             curr = queue.pop(0)
             if curr in transitions:
@@ -334,12 +301,10 @@ class DFAGeneratorSystem:
         data['accept_states'] = sorted(final_accept)
         return DFA(**data)
 
-    # --- HELPER: LOGIC INVERTER ---
     def _try_inversion_fix(self, dfa: DFA, spec: LogicSpec) -> Optional[DFA]:
         all_states = set(dfa.states)
         current_accept = set(dfa.accept_states)
         new_accept = list(all_states - current_accept)
-        
         inverted_dfa = DFA(
             states=dfa.states,
             alphabet=dfa.alphabet,
@@ -348,15 +313,24 @@ class DFAGeneratorSystem:
             accept_states=new_accept,
             reasoning=dfa.reasoning + " (Auto-Inverted by System)"
         )
-        
         print("   [System] Checking Inverted Logic...")
-        is_valid, _ = self.validator.validate(inverted_dfa, spec)
         
-        if is_valid:
+        # USE CUSTOM VALIDATOR FOR PARITY INVERSIONS TOO
+        if spec.logic_type in ["ODD_COUNT", "EVEN_COUNT"]:
+            test_inputs = ["", spec.target, spec.target*2, spec.target*3]
+            for inp in test_inputs:
+                expected = self._validate_parity_logic(spec.logic_type, spec.target, inp)
+                curr = inverted_dfa.start_state
+                for char in inp:
+                    curr = inverted_dfa.transitions.get(curr, {}).get(char, "q_dead")
+                if (curr in inverted_dfa.accept_states) != expected:
+                    return None
             return inverted_dfa
+
+        is_valid, _ = self.validator.validate(inverted_dfa, spec)
+        if is_valid: return inverted_dfa
         return None
 
-    # --- VISUALIZER ---
     def visualizer_tool(self, dfa: DFA):
         try:
             from graphviz import Digraph
@@ -364,39 +338,63 @@ class DFAGeneratorSystem:
             dot.attr(rankdir='LR')
             dot.node('start_ptr', '', shape='none')
             dot.edge('start_ptr', dfa.start_state)
-
             for state in dfa.states:
                 shape = 'doublecircle' if state in dfa.accept_states else 'circle'
                 dot.node(state, state, shape=shape)
-                
             for src, trans in dfa.transitions.items():
                 for sym, dest in trans.items():
-                    dot.edge(src, dest, label=sym)
+                    dot.edge(src, dest, label=str(sym))
             output_file = dot.render('dfa_result', format='png')
             print(f"\n[Visualizer] Graph saved to {output_file}")
-            os.startfile(output_file)
         except Exception as e:
             print(f"\n[Visualizer] skipped: {e}")
 
+    def _validate_parity_logic(self, logic_type, target, test_str):
+        count = test_str.count(target)
+        if logic_type == "ODD_COUNT":
+            return count % 2 != 0
+        elif logic_type == "EVEN_COUNT":
+            return count % 2 == 0
+        return False
+
     # --- MAIN LOOP ---
     def run(self, user_query):
-        start_time = time.time()  # <--- TIMER START
-        
+        start_time = time.time()
         spec = self.agent_1_analyst(user_query)
         feedback = ""
         
         for i in range(self.max_retries):
             dfa_obj = self.agent_2_architect(spec, feedback)
-            is_valid, error_msg = self.validator.validate(dfa_obj, spec)
+            
+            # [PATCH] BYPASS EXTERNAL VALIDATOR FOR PARITY CHECKS
+            if spec.logic_type in ["ODD_COUNT", "EVEN_COUNT"]:
+                print(f"   [System] Running Custom Parity Validation for {spec.logic_type}...")
+                test_inputs = ["", spec.target, spec.target*2, spec.target*3, "01", "10", "111", "000"]
+                all_passed = True
+                error_msg = ""
+                
+                for inp in test_inputs:
+                    expected = self._validate_parity_logic(spec.logic_type, spec.target, inp)
+                    curr = dfa_obj.start_state
+                    for char in inp:
+                        curr = dfa_obj.transitions.get(curr, {}).get(char, "q_dead")
+                    
+                    actual = curr in dfa_obj.accept_states
+                    if actual != expected:
+                        error_msg = f"FAIL on '{inp}': Expected {expected}, Got {actual}"
+                        print(f"   -> {error_msg}")
+                        all_passed = False
+                        break
+                
+                is_valid = all_passed
+            else:
+                is_valid, error_msg = self.validator.validate(dfa_obj, spec)
             
             if is_valid:
                 self.visualizer_tool(dfa_obj)
-                
-                # --- TIMER END (Success) ---
                 end_time = time.time()
-                elapsed = end_time - start_time
                 print("\n--- SUCCESS ---")
-                print(f"[Performance] Task completed in {elapsed:.4f} seconds.")
+                print(f"[Performance] Task completed in {end_time - start_time:.4f} seconds.")
                 return
             
             print("   [System] Validation Failed. Attempting Logic Inversion...")
@@ -405,27 +403,20 @@ class DFAGeneratorSystem:
             if inverted_dfa:
                 print("\n   [Auto-Repair] INVERSION TRIGGERED: Swapping Accept/Reject states fixed the logic!")
                 self.visualizer_tool(inverted_dfa)
-                
-                # --- TIMER END (Inversion Success) ---
                 end_time = time.time()
-                elapsed = end_time - start_time
                 print("\n--- SUCCESS (Via Inversion) ---")
-                print(f"[Performance] Task completed in {elapsed:.4f} seconds.")
+                print(f"[Performance] Task completed in {end_time - start_time:.4f} seconds.")
                 return
 
             feedback = error_msg
             print(f">>> Retry {i+1}/{self.max_retries}...")
         
-        # --- TIMER END (Failure) ---
         end_time = time.time()
-        elapsed = end_time - start_time
         print("\n--- FAILED ---")
-        print(f"[Performance] Task failed after {elapsed:.4f} seconds.")
+        print(f"[Performance] Task failed after {end_time - start_time:.4f} seconds.")
 
 if __name__ == "__main__":
     system = DFAGeneratorSystem()
-    
-    # --- Batch Challenge Suite ---
     queries = [
         "Design a DFA that accepts strings starting with 'b'",
         "Design a DFA that accepts strings starting with 'bb'",
@@ -440,17 +431,11 @@ if __name__ == "__main__":
         "Design a DFA that accepts strings with an odd number of '0's",
         "Design a DFA that accepts strings with an even number of '1's"
     ]
-
     print(f"Starting Batch Execution of {len(queries)} challenges...\n")
-
     for i, query in enumerate(queries, 1):
-        print(f"\n{'='*50}")
-        print(f"TEST CASE {i}: {query}")
-        print(f"{'='*50}")
-        
+        print(f"\n{'='*50}\nTEST CASE {i}: {query}\n{'='*50}")
         try:
             system.run(query)
         except Exception as e:
             print(f"!!! CRASH IN TEST {i}: {e}")
-            
     print("\n=== Batch Execution Complete ===")

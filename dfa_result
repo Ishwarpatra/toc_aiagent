@@ -2,11 +2,11 @@
 digraph {
 	rankdir=LR
 	start_ptr [label="" shape=none]
-	start_ptr -> q0
-	q0 [label=q0 shape=circle]
-	q1 [label=q1 shape=doublecircle]
-	q0 -> q1 [label=b]
-	q0 -> q0 [label=a]
-	q1 -> q1 [label=a]
-	q1 -> q1 [label=b]
+	start_ptr -> even
+	even [label=even shape=doublecircle]
+	odd [label=odd shape=circle]
+	even -> even [label=0]
+	even -> odd [label=1]
+	odd -> odd [label=0]
+	odd -> even [label=1]
 }
