@@ -44,19 +44,20 @@ class DFAGeneratorSystem:
             raise e
 
     # --- AGENT 1: THE EXTRACTOR ---
+   # --- AGENT 1: THE EXTRACTOR ---
     def agent_1_analyst(self, user_prompt: str) -> LogicSpec:
         print(f"\n[Agent 1] Extracting Logic Variables...")
         system_prompt = (
-            "You are a Parameter Extractor. Your job is to convert natural language into variables.\n"
+            "You are a Parameter Extractor. Output JSON only.\n"
             "Supported Types:\n"
-            "- STARTS_WITH (e.g. 'starts with b')\n"
-            "- NOT_STARTS_WITH (e.g. 'does not start with b')\n"
-            "- ENDS_WITH (e.g. 'ending in aba')\n"
-            "- NOT_ENDS_WITH (e.g. 'not ending in a')\n"
-            "- CONTAINS (e.g. 'containing bb')\n"
-            "- NOT_CONTAINS (e.g. 'does not contain a')\n"
+            "- STARTS_WITH / NOT_STARTS_WITH (target: substring)\n"
+            "- ENDS_WITH / NOT_ENDS_WITH (target: substring)\n"
+            "- CONTAINS / NOT_CONTAINS (target: substring)\n"
+            "- DIVISIBLE_BY (target: the number as string, e.g., '3')\n"
+            "- NO_CONSECUTIVE (target: the symbol forbidden from repeating, e.g., '1')\n"
+            "- ODD_COUNT (target: the character to count, e.g., '0')\n"
+            "- EVEN_COUNT (target: the character to count, e.g., '1')\n"
             "\n"
-            "Extract the 'target' substring exactly."
         )
         
         try:
@@ -68,9 +69,11 @@ class DFAGeneratorSystem:
             data = json.loads(response)
             data['logic_type'] = data['logic_type'].upper()
             
+            # Fallback extraction if LLM misses the target
             if not data['target']:
-                match = re.search(r"['\"](.*?)['\"]", user_prompt)
-                if match: data['target'] = match.group(1)
+                match = re.search(r"['\"](.*?)['\"]", user_prompt) # Try quotes
+                if not match: match = re.search(r"\b\d+\b", user_prompt) # Try numbers
+                if match: data['target'] = match.group(0).strip("'\"")
 
             spec = LogicSpec(**data)
             print(f"   -> Extracted: {spec.logic_type} | Target: '{spec.target}'")
@@ -251,7 +254,47 @@ class DFAGeneratorSystem:
             else:
                 # NOT_ENDS_WITH: All states EXCEPT the final one are accept
                 accept_states = set(chain_states[:-1])
+        elif type_str == "NO_CONSECUTIVE" and target:
+            print(f"   [Auto-Repair] Building No-Consecutive '{target}' Machine")
+            clean_states = ["safe", "seen_one", "trap"]
+            start_state = "safe"
+            accept_states = {"safe", "seen_one"}
+            transitions = {}
+            
+            other_char = '1' if target == '0' else '0'
 
+            # Safe state (haven't just seen the forbidden char)
+            transitions["safe"] = {
+                other_char: "safe", 
+                target: "seen_one"
+            }
+            # Seen_one state (just saw one forbidden char)
+            transitions["seen_one"] = {
+                other_char: "safe",
+                target: "trap" # Second one in a row!
+            }
+            # Trap state
+            transitions["trap"] = {s: "trap" for s in alphabet}
+
+        # --- NEW LOGIC: PARITY COUNTING ---
+        elif (type_str == "EVEN_COUNT" or type_str == "ODD_COUNT") and target:
+            print(f"   [Auto-Repair] Building Parity Counter for '{target}'")
+            clean_states = ["even", "odd"]
+            start_state = "even"
+            accept_states = {"even"} if type_str == "EVEN_COUNT" else {"odd"}
+            transitions = {}
+            
+            other_char = '1' if target == '0' else '0'
+
+            transitions["even"] = {
+                other_char: "even", # Count doesn't change
+                target: "odd"       # Count flips
+            }
+            transitions["odd"] = {
+                other_char: "odd",
+                target: "even"
+            }            
+        
         # --- GENERAL REPAIR (FALLBACK) ---
         else:
             for state in clean_states:
@@ -390,7 +433,12 @@ if __name__ == "__main__":
         "Design a DFA that accepts strings ending with 'ab'",
         "Design a DFA that accepts strings not ending with 'a'",
         "Design a DFA that accepts strings that contains 'b'",
-        "Design a DFA that accepts strings that does not contain 'aa'"
+        "Design a DFA that accepts strings that does not contain 'aa'",
+        "Design a DFA accepting binary numbers divisible by 3",
+        "Design a DFA accepting binary numbers divisible by 5",
+        "Design a DFA that accepts strings with no consecutive '1's",
+        "Design a DFA that accepts strings with an odd number of '0's",
+        "Design a DFA that accepts strings with an even number of '1's"
     ]
 
     print(f"Starting Batch Execution of {len(queries)} challenges...\n")
