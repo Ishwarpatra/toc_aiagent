@@ -15,13 +15,20 @@ class LogicSpec(BaseModel):
         user_lower = user_prompt.lower()
         deduced_type = None
         deduced_target = None
+        # Default alphabet is 0,1, but we will change it if we see letters
+        deduced_alphabet = ['0', '1'] 
+
+        # --- ALPHABET DETECTION ---
+        # If the prompt contains 'a' or 'b' (and isn't just about hex/binary), switch to a/b
+        if re.search(r"['\"]?[a-zA-Z]['\"]?", user_prompt):
+             deduced_alphabet = ['a', 'b']
 
         # Parity Logic
-        parity_match = re.search(r"(odd|even)\s+number\s+of\s+['\"]?([01])['\"]?s?", user_lower)
+        parity_match = re.search(r"(odd|even)\s+number\s+of\s+['\"]?([01a-zA-Z])['\"]?s?", user_lower)
         if parity_match:
-            ptype, digit = parity_match.groups()
+            ptype, char = parity_match.groups()
             deduced_type = "ODD_COUNT" if ptype == "odd" else "EVEN_COUNT"
-            deduced_target = digit
+            deduced_target = char
 
         # Divisibility Logic
         elif "divisible by" in user_lower:
@@ -33,7 +40,7 @@ class LogicSpec(BaseModel):
         # Standard String Logic
         elif "no consecutive" in user_lower: 
             deduced_type = "NO_CONSECUTIVE"
-            char_match = re.search(r"consecutive\s+['\"]?([01])['\"]?s?", user_lower)
+            char_match = re.search(r"consecutive\s+['\"]?([01a-zA-Z])['\"]?s?", user_lower)
             deduced_target = char_match.group(1) if char_match else "1"
         elif "not start" in user_lower or "does not start" in user_lower: deduced_type = "NOT_STARTS_WITH"
         elif "start" in user_lower or "begin" in user_lower: deduced_type = "STARTS_WITH"
@@ -51,7 +58,13 @@ class LogicSpec(BaseModel):
                 deduced_target = match.group(0).strip("'\"")
 
         if deduced_type and deduced_target:
-            return cls(logic_type=deduced_type, target=deduced_target)
+            # Ensure the target characters are in the alphabet
+            for char in deduced_target:
+                if char not in deduced_alphabet:
+                    if char.isdigit(): deduced_alphabet = ['0', '1']
+                    else: deduced_alphabet = ['a', 'b']
+            
+            return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
         
         return None
 
