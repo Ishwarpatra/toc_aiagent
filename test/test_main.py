@@ -1,6 +1,6 @@
 import pytest
-from main import DFAGeneratorSystem
-from validator import DeterministicValidator, LogicSpec, DFA
+from main import DFAGeneratorSystem, DFA
+from core.validator import DeterministicValidator, LogicSpec
 
 # Initialize the engine once
 validator = DeterministicValidator()

@@ -30,6 +30,9 @@ class DFAGeneratorSystem:
     def visualizer_tool(self, dfa):
         try:
             from graphviz import Digraph
+            output_dir = "output"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
             dot = Digraph(comment='DFA Visualization')
             dot.attr(rankdir='LR')
             dot.node('start_ptr', '', shape='none')
@@ -40,7 +43,11 @@ class DFAGeneratorSystem:
             for src, trans in dfa.transitions.items():
                 for sym, dest in trans.items():
                     dot.edge(src, dest, label=str(sym))
-            output_file = dot.render('dfa_result', format='png')
+            
+            # SAVE TO OUTPUT FOLDER
+            output_path = os.path.join(output_dir, 'dfa_result')
+            output_file = dot.render(output_path, format='png')
+            
             print(f"\n[Visualizer] Graph saved to {output_file}")
         except Exception as e:
             print(f"\n[Visualizer] skipped: {e}")

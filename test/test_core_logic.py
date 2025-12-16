@@ -1,5 +1,5 @@
 import pytest
-from validator import DeterministicValidator, LogicSpec
+from core.validator import DeterministicValidator, LogicSpec
 
 # Initialize the engine once
 validator = DeterministicValidator()
