@@ -103,3 +103,40 @@ Regression: Confirmed auto_repair_dfa no longer throws errors on partial transit
 End-to-End Tests: Validated that dead states are correctly attached during the repair process.
 
 Visuals: Graphs correctly display trap states when necessary.
+Commit: Fix: Enforce deterministic validation and lock alphabet detection
+
+Author: Iswar patra
+
+Date: Dec 17, 2025
+
+Summary
+
+This update hardens validation and input parsing to prevent two classes of failures:
+
+- Parity Bypass Removal: Removed the parity-specific shortcut that could prematurely
+  mark Odd/Even specifications as satisfied without running the deterministic
+  validation engine. The `main.py` run loop was simplified to ALWAYS call the
+  `DeterministicValidator` for every `LogicSpec` (no special-case short-circuits).
+
+- Alphabet Locking for Mixed Inputs: Improved `LogicSpec.from_prompt` in
+  `core/models.py` so that if any alphabetic character appears in the user's
+  prompt or in the extracted target, the system locks the alphabet to `['a', 'b']`.
+  This prevents flip-flopping when targets contain mixed alphanumeric tokens
+  (e.g., "a1") and avoids visualizer/repair confusion where transitions from
+  different alphabets would be mixed.
+
+Files Modified
+
+- `main.py`  Replaced the run-loop to always validate via `DeterministicValidator`.
+- `core/models.py`  Updated `LogicSpec.from_prompt` alphabet detection and target
+  extraction logic to prefer letter alphabets when any letters are present.
+
+Verification
+
+- Unit tests: Ran the test suite; all tests passed (8 passed).
+- Manual check: Visualizer no longer mixes `a/b` transitions with `0/1` dead states
+  for mixed-target specs.
+
+Notes
+
+- Commit(s) pushed to `origin/main`.
