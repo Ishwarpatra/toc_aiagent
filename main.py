@@ -63,32 +63,27 @@ class DFAGeneratorSystem:
         for i in range(self.max_retries):
             # Agent 2: Architect (Includes Auto-Repair)
             dfa_obj = self.architect.design(spec, feedback)
-            
-            # Parity Bypass (Same as before, could be moved to validator but kept for safety)
-            if spec.logic_type in ["ODD_COUNT", "EVEN_COUNT"]:
-                print(f"   [System] Running Custom Parity Validation...")
-                # ... (Can use the repair engine's static checker if exposed, or existing logic)
-                # For brevity, reusing the logic from repair engine or validator
-                # Let's trust the repair engine's internal construction for now or minimal check
-                is_valid = True 
-            else:
-                is_valid, error_msg = self.validator.validate(dfa_obj, spec)
-            
+
+            # ALWAYS validate via the deterministic validator for every logic type
+            # (no special-case 'short-circuits' for parity or other problems).
+            is_valid, error_msg = self.validator.validate(dfa_obj, spec)
+
             if is_valid:
                 self.visualizer_tool(dfa_obj)
                 print(f"\n--- SUCCESS in {time.time() - start_time:.4f}s ---")
                 return
-            
+
             # Auto-Repair: Inversion Attempt
             print("   [System] Validation Failed. Attempting Logic Inversion...")
             inverted_dfa = self.repair_engine.try_inversion_fix(dfa_obj, spec, self.validator)
-            
+
             if inverted_dfa:
                 print("\n   [Auto-Repair] INVERSION TRIGGERED!")
                 self.visualizer_tool(inverted_dfa)
                 print(f"\n--- SUCCESS (Via Inversion) in {time.time() - start_time:.4f}s ---")
                 return
 
+            # No shortcut: pass validator feedback back to architect for refinement.
             feedback = error_msg
             print(f">>> Retry {i+1}/{self.max_retries}...")
         

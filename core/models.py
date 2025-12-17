@@ -19,9 +19,13 @@ class LogicSpec(BaseModel):
         deduced_alphabet = ['0', '1'] 
 
         # --- ALPHABET DETECTION ---
-        # If the prompt contains 'a' or 'b' (and isn't just about hex/binary), switch to a/b
-        if re.search(r"['\"]?[a-zA-Z]['\"]?", user_prompt):
-             deduced_alphabet = ['a', 'b']
+        # Prefer letters if any are present in the prompt; otherwise default to '0','1'.
+        # Once we decide on letters we DO NOT flip back because mixed targets like 'a1'
+        # should keep the alphabet as letters when a letter appears anywhere.
+        if re.search(r"[a-zA-Z]", user_prompt):
+            deduced_alphabet = ['a', 'b']
+        else:
+            deduced_alphabet = ['0', '1']
 
         # Parity Logic
         parity_match = re.search(r"(odd|even)\s+number\s+of\s+['\"]?([01a-zA-Z])['\"]?s?", user_lower)
@@ -50,23 +54,14 @@ class LogicSpec(BaseModel):
         elif "contain" in user_lower: deduced_type = "CONTAINS"
 
         # Target Extraction
-        if deduced_type and not deduced_target:
-            match = re.search(r"['\"](.*?)['\"]", user_prompt)
-            if not match: 
-                match = re.search(r"\b[01a-zA-Z]+\b$", user_prompt)
-            if match: 
-                deduced_target = match.group(0).strip("'\"")
-
         if deduced_type and deduced_target:
-            # Ensure the target characters are in the alphabet
-            for char in deduced_target:
-                if char not in deduced_alphabet:
-                    if char.isdigit(): deduced_alphabet = ['0', '1']
-                    else: deduced_alphabet = ['a', 'b']
-            
+            # If the target itself contains any letter, ensure alphabet is letters and do
+            # not allow a later rule to flip it back to digits. Otherwise keep the
+            # alphabet inferred from the overall prompt.
+            if re.search(r"[a-zA-Z]", deduced_target):
+                deduced_alphabet = ['a', 'b']
+
             return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
-        
-        return None
 
 # --- EXISTING DFA MODEL ---
 class DFA(BaseModel):
