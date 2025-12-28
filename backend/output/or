@@ -1,0 +1,33 @@
+// DFA Visualization
+digraph {
+	rankdir=LR
+	start_ptr [label="" shape=none]
+	start_ptr -> q0_q0_q0
+	q0_q0_q0 [label=q0_q0_q0 shape=circle]
+	q1_q0_q1 [label=q1_q0_q1 shape=doublecircle]
+	q1_q1_q0 [label=q1_q1_q0 shape=doublecircle]
+	q1_q2_q0 [label=q1_q2_q0 shape=doublecircle]
+	q1_q2_q1 [label=q1_q2_q1 shape=doublecircle]
+	q_dead_q0_q1 [label=q_dead_q0_q1 shape=circle]
+	q_dead_q1_q0 [label=q_dead_q1_q0 shape=circle]
+	q_dead_q2_q0 [label=q_dead_q2_q0 shape=doublecircle]
+	q_dead_q2_q1 [label=q_dead_q2_q1 shape=circle]
+	q0_q0_q0 -> q1_q0_q1 [label=a]
+	q0_q0_q0 -> q_dead_q1_q0 [label=b]
+	q1_q0_q1 -> q1_q0_q1 [label=a]
+	q1_q0_q1 -> q1_q1_q0 [label=b]
+	q_dead_q1_q0 -> q_dead_q0_q1 [label=a]
+	q_dead_q1_q0 -> q_dead_q2_q0 [label=b]
+	q1_q1_q0 -> q1_q0_q1 [label=a]
+	q1_q1_q0 -> q1_q2_q0 [label=b]
+	q_dead_q0_q1 -> q_dead_q0_q1 [label=a]
+	q_dead_q0_q1 -> q_dead_q1_q0 [label=b]
+	q_dead_q2_q0 -> q_dead_q2_q1 [label=a]
+	q_dead_q2_q0 -> q_dead_q2_q0 [label=b]
+	q1_q2_q0 -> q1_q2_q1 [label=a]
+	q1_q2_q0 -> q1_q2_q0 [label=b]
+	q_dead_q2_q1 -> q_dead_q2_q1 [label=a]
+	q_dead_q2_q1 -> q_dead_q2_q0 [label=b]
+	q1_q2_q1 -> q1_q2_q1 [label=a]
+	q1_q2_q1 -> q1_q2_q0 [label=b]
+}
