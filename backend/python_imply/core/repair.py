@@ -21,7 +21,16 @@ class DFARepairEngine:
 
         type_str = spec.logic_type
         target = spec.target
-
+        MAX_STATES = 100
+    
+        if type_str == "DIVISIBLE_BY" and target.isdigit():
+            divisor = int(target)
+            if divisor > MAX_STATES:
+                print(f"[Warning] Divisor {divisor} too large. Clamping to {MAX_STATES}.")
+                # Option 1: Throw error
+                raise ValueError(f"Divisor too large (Max: {MAX_STATES})")
+        if target and len(target) > 50:
+            raise ValueError("Target string is too long (Max: 50 chars)")
         # --- LOGIC INJECTION ---
 
         if type_str == "STARTS_WITH" and target:

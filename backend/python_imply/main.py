@@ -1,5 +1,7 @@
 import os
 import time
+import shutil
+import sys
 from core.validator import DeterministicValidator
 from core.repair import DFARepairEngine
 from core.agents import AnalystAgent, ArchitectAgent
@@ -8,16 +10,13 @@ from core.models import DFA
 # --- Configuration ---
 MODEL_NAME = "qwen2.5-coder:1.5b" 
 
-# --- Graphviz Path Fix ---
-possible_paths = [
-    r"C:\Program Files\Graphviz\bin",
-    r"C:\Program Files (x86)\Graphviz\bin",
-    "/usr/local/bin",
-    "/usr/bin"
-]
-for path in possible_paths:
-    if os.path.exists(path):
-        os.environ["PATH"] += os.pathsep + path
+# Check if Graphviz is installed
+if not shutil.which("dot"):
+    print("\n[System Error] Graphviz not found in PATH.")
+    print("Please install Graphviz from https://graphviz.org/download/")
+    print("Add it to your system PATH or update the 'possible_paths' list in main.py.\n")
+    # Optional: Exit if strictly required
+    # sys.exit(1)
 
 class DFAGeneratorSystem:
     def __init__(self):

@@ -48,28 +48,35 @@ class AnalystAgent(BaseAgent):
         
         # 🟢 FIX: Detailed System Prompt with EXAMPLES
         system_prompt = (
-            f"""You are a Logic Analyst.
-            Your job is to extract logical constraints into a JSON tree.
-            
-            ⛔ DO NOT DESIGN THE DFA.
-            ⛔ DO NOT RETURN STATES OR TRANSITIONS.
-            ✅ RETURN ONLY THE LOGIC SPECIFICATION.
+            f"""You are an expert Logic Analyst.
+            Your task is to translate natural language constraints into a structured JSON Logic Tree.
+
+            ⛔ CRITICAL CONSTRAINTS:
+            1. DO NOT DESIGN A DFA. DO NOT RETURN "states" or "transitions".
+            2. OUTPUT ONLY THE JSON LOGIC SPECIFICATION.
+            3. NO MARKDOWN (Do not use ```json ... ```).
+
+            ⚖️ LOGIC PRECEDENCE RULES (Order of Operations):
+            1. Parentheses `(...)`: Highest priority. Group these first.
+            2. `NOT`: Binds tighter than AND/OR.
+            3. `AND`: Binds tighter than OR.
+            4. `OR`: Lowest priority.
 
             The JSON MUST match this schema exactly:
             {{
-                "logic_type": "AND | OR | NOT | STARTS_WITH | ENDS_WITH | CONTAINS",
+                "logic_type": "AND | OR | NOT | STARTS_WITH | ENDS_WITH | CONTAINS | ...",
                 "target": "string or null",
                 "children": [ List of nested LogicSpecs ]
             }}
 
-            ### EXAMPLES (FOLLOW THESE):
-            
+            ### EXAMPLES (Study these carefully):
+
             Input: "starts with a"
             Output: {{ "logic_type": "STARTS_WITH", "target": "a", "children": [] }}
 
-            Input: "starts with a and ends with b"
+            Input: "starts with a or ends with b"
             Output: {{
-                "logic_type": "AND",
+                "logic_type": "OR",
                 "target": null,
                 "children": [
                     {{ "logic_type": "STARTS_WITH", "target": "a", "children": [] }},
@@ -77,7 +84,22 @@ class AnalystAgent(BaseAgent):
                 ]
             }}
 
-            Return JSON ONLY. No Markdown.
+            Input: "(starts with a or starts with b) and ends with c"
+            Output: {{
+                "logic_type": "AND",
+                "target": null,
+                "children": [
+                    {{ 
+                        "logic_type": "OR",
+                        "target": null,
+                        "children": [
+                             {{ "logic_type": "STARTS_WITH", "target": "a", "children": [] }},
+                             {{ "logic_type": "STARTS_WITH", "target": "b", "children": [] }}
+                        ]
+                    }},
+                    {{ "logic_type": "ENDS_WITH", "target": "c", "children": [] }}
+                ]
+            }}
             """
         )
         
@@ -151,17 +173,13 @@ class ArchitectAgent(BaseAgent):
 
         # --- BASE CASE (Atomic) ---
         print(f"\n[Architect] Designing Atomic: {spec.logic_type} '{spec.target}'")
-        system_prompt = (
-            "You are a DFA Architect. Output VALID JSON.\n"
-            f"Task: Create DFA for {spec.logic_type} '{spec.target}'\n"
-            "Use standard construction (q0 start, q_dead for traps)."
-        )
+        empty_template = {
+            "states": ["q0"],
+            "transitions": {},
+            "accept_states": [],
+            "start_state": "q0",
+            "alphabet": spec.alphabet
+        }
         
-        try:
-            resp = self.call_ollama(system_prompt, f"Alphabet: {spec.alphabet}", DFA.model_json_schema())
-            raw_data = json.loads(resp)
-            raw_data['alphabet'] = spec.alphabet
-            return self.repair_engine.auto_repair_dfa(raw_data, spec)
-        except Exception as e:
-            print(f"   -> Architect Failed: {e}")
-            raise e
+        return self.repair_engine.auto_repair_dfa(empty_template, spec)
+    
