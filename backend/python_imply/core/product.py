@@ -19,7 +19,8 @@ class ProductConstructionEngine:
         queue = [start_node]
         visited = {start_node}
         
-        def get_name(s1, s2): return f"{s1}_{s2}"
+        # 🟢 FIX: Use Pipe '|' separator to avoid collision with 'q_dead' underscores
+        def get_name(s1, s2): return f"{s1}|{s2}"
 
         while queue:
             curr1, curr2 = queue.pop(0)
@@ -45,15 +46,13 @@ class ProductConstructionEngine:
                 next1 = dfa1.transitions.get(curr1, {}).get(char, "q_dead")
                 next2 = dfa2.transitions.get(curr2, {}).get(char, "q_dead")
                 
-                # If the child DFA uses a different name for dead state, logic still holds
-                # because next1/next2 are just strings used to form the key.
-                
                 next_name = get_name(next1, next2)
                 new_transitions[curr_name][char] = next_name
 
                 if (next1, next2) not in visited:
                     visited.add((next1, next2))
                     queue.append((next1, next2))
+                    
         return DFA(
             reasoning=f"Combined ({dfa1.reasoning}) {operation} ({dfa2.reasoning})",
             states=sorted(new_states),

@@ -43,31 +43,85 @@ class AnalystAgent(BaseAgent):
                 heuristic.set_alphabet_recursive(detected_alphabet)
                 return heuristic
 
-        # --- 3. ASK LLM (Recursive) ---
+       # --- 3. ASK LLM (Recursive) ---
         print("   -> Complex logic detected. Asking LLM (Relaxed Mode)...")
+        
+        # 🟢 FIX: Detailed System Prompt with EXAMPLES
         system_prompt = (
-            "You are a Logic Extractor. Output VALID JSON only. Do not wrap in markdown.\n"
-            "Recursive Logic:\n"
-            "- 'A and B' -> logic_type='AND', children=[SpecA, SpecB]\n"
-            "- 'A or B'  -> logic_type='OR', children=[SpecA, SpecB]\n"
-            "- 'NOT (complex)' -> logic_type='NOT', children=[SpecA]\n"
-            "Atomic types (PREFERRED for simple negation):\n"
-            "- STARTS_WITH, NOT_STARTS_WITH\n"
-            "- ENDS_WITH, NOT_ENDS_WITH\n"
-            "- CONTAINS, NOT_CONTAINS\n"
-            "Example: 'not end with a' -> {\"logic_type\": \"NOT_ENDS_WITH\", \"target\": \"a\"}\n"
+            f"""You are a Logic Analyst.
+            Your job is to extract logical constraints into a JSON tree.
+            
+            ⛔ DO NOT DESIGN THE DFA.
+            ⛔ DO NOT RETURN STATES OR TRANSITIONS.
+            ✅ RETURN ONLY THE LOGIC SPECIFICATION.
+
+            The JSON MUST match this schema exactly:
+            {{
+                "logic_type": "AND | OR | NOT | STARTS_WITH | ENDS_WITH | CONTAINS",
+                "target": "string or null",
+                "children": [ List of nested LogicSpecs ]
+            }}
+
+            ### EXAMPLES (FOLLOW THESE):
+            
+            Input: "starts with a"
+            Output: {{ "logic_type": "STARTS_WITH", "target": "a", "children": [] }}
+
+            Input: "starts with a and ends with b"
+            Output: {{
+                "logic_type": "AND",
+                "target": null,
+                "children": [
+                    {{ "logic_type": "STARTS_WITH", "target": "a", "children": [] }},
+                    {{ "logic_type": "ENDS_WITH", "target": "b", "children": [] }}
+                ]
+            }}
+
+            Return JSON ONLY. No Markdown.
+            """
         )
         
         try:
             resp = self.call_ollama(system_prompt, user_prompt)
-            cleaned_resp = resp.replace("```json", "").replace("```", "").strip()
-            spec = LogicSpec.model_validate_json(cleaned_resp)
+            
+            # Clean Markdown if present
+            cleaned_resp = (
+                resp.replace("```json", "")
+                    .replace("```", "")
+                    .strip()
+            )
+            
+            # 1️⃣ Parse JSON manually first
+            data = json.loads(cleaned_resp)
+
+            # 🟢 FIX: Safety Guard - Check if LLM returned a DFA instead of Logic
+            if "states" in data or "transitions" in data:
+                print("   [Analyst Warning] LLM generated a DFA instead of LogicSpec. Retrying logic...")
+                raise ValueError("LLM returned DFA states instead of logic tree.")
+
+            # 2️⃣ Normalization Layer (Fix common LLM typos)
+            if "type" in data and "logic_type" not in data:
+                data["logic_type"] = data.pop("type")
+            if "constraints" in data and "children" not in data:
+                data["children"] = data.pop("constraints")
+                
+            # Normalize children recursively
+            if "children" in data:
+                for child in data["children"]:
+                    if "type" in child and "logic_type" not in child:
+                        child["logic_type"] = child.pop("type")
+
+            # 3️⃣ Validate
+            spec = LogicSpec.model_validate(data)
             spec.set_alphabet_recursive(detected_alphabet)
             return spec
+
         except Exception as e:
             print(f"   [Analyst Error] {e}")
+            # Optional: Fallback to a simple CONTAINS if parsing fails completely
+            # return LogicSpec(logic_type="CONTAINS", target="a", alphabet=detected_alphabet)
             raise ValueError("Could not parse logic.")
-
+        
 class ArchitectAgent(BaseAgent):
     def __init__(self, model_name):
         super().__init__(model_name)

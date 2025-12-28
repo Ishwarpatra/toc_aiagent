@@ -99,4 +99,4 @@ class DFAGeneratorSystem:
 if __name__ == "__main__":
     system = DFAGeneratorSystem()
     # Test NOT logic
-    system.run("Strings that start with 'a' OR (contain 'bb' AND do not end with 'a'")
+    system.run("Design a DFA that accepts strings starts with 'a' OR ends with 'b'")
