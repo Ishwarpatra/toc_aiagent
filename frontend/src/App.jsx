@@ -26,15 +26,24 @@ export default function App() {
       {/* Bottom Play Bar */}
       <div
         style={{
-          height: "50px",
+          height: "60px",
           background: "#222",
-          color: "white",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        ▶ Play
+        <button
+          style={{
+            padding: "10px 24px",
+            fontSize: "16px",
+            cursor: "pointer",
+            border: "none",
+            borderRadius: "4px",
+          }}
+        >
+          ▶ Play
+        </button>
       </div>
     </div>
   );

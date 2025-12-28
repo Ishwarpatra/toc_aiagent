@@ -4,15 +4,15 @@ export default function Canvas() {
       style={{
         flex: 1,
         background: "#ffffff",
-        height: "100%",
+        padding: "16px",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "18px",
+        alignItems: "flex-start",     // 🔹 top
+        justifyContent: "flex-start", // 🔹 left
+        fontSize: "16px",
         color: "#333",
       }}
     >
-      Canvas Area (DFA Visualization)
+      DFA Visualization Area
     </div>
   );
 }
