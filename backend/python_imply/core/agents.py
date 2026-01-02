@@ -29,9 +29,16 @@ class AnalystAgent(BaseAgent):
         print(f"\n[Agent 1] Analyzing Request: '{user_prompt}'")
         
         # --- 1. DETECT ALPHABET GLOBALLY ---
+        # Prefer explicit quoted characters in the prompt (e.g. '0' or 'a').
         detected_alphabet = ['0', '1']
-        if re.search(r"[a-z]", user_prompt.lower()):
+        lp = user_prompt.lower()
+        if re.search(r"['\"][ab]['\"]", lp):
             detected_alphabet = ['a', 'b']
+        elif re.search(r"['\"][01]['\"]", lp):
+            detected_alphabet = ['0', '1']
+        else:
+            # fallback: keep binary unless explicit letter targets are present
+            detected_alphabet = ['0', '1']
         print(f"   -> Detected Alphabet: {detected_alphabet}")
 
         # --- 2. TRY HEURISTIC (Atomic) ---
@@ -180,6 +187,20 @@ class ArchitectAgent(BaseAgent):
             "start_state": "q0",
             "alphabet": spec.alphabet
         }
-        
-        return self.repair_engine.auto_repair_dfa(empty_template, spec)
+
+        # Ask the LLM for a DFA JSON template; if it fails, fall back to the empty template.
+        system_prompt = (
+            "You are a DFA architect. Return a JSON object describing a DFA with keys: "
+            "states, start_state, accept_states, transitions. Do NOT include any commentary."
+        )
+
+        user_prompt = f"Design a DFA for logic {spec.logic_type} target '{spec.target}' with alphabet {spec.alphabet}. Return only JSON."
+
+        try:
+            resp = self.call_ollama(system_prompt, user_prompt)
+            cleaned = resp.replace("```json", "").replace("```", "").strip()
+            data = json.loads(cleaned)
+            return self.repair_engine.auto_repair_dfa(data, spec)
+        except Exception:
+            return self.repair_engine.auto_repair_dfa(empty_template, spec)
     

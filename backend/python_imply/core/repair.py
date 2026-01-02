@@ -48,10 +48,16 @@ class DFARepairEngine:
 
             for i, st in enumerate(required[:-1]):
                 char = target[i]
-                transitions[st][char] = required[i+1]
+                # Prefer LLM-provided transitions; only fill missing entries.
+                transitions[st].setdefault(char, required[i+1])
                 for c in alphabet:
-                    if c != char: transitions[st][c] = "q_dead"
-            transitions[final] = {c: final for c in alphabet} # Trap accept
+                    if c != char:
+                        transitions[st].setdefault(c, "q_dead")
+
+            # Ensure final (accept) state loops to itself for missing symbols
+            transitions.setdefault(final, {})
+            for c in alphabet:
+                transitions[final].setdefault(c, final)
 
         elif (type_str == "ENDS_WITH" or type_str == "NOT_ENDS_WITH") and target:
             # Rebuild states strictly: q0..qN where N=len(target)
@@ -162,6 +168,7 @@ class DFARepairEngine:
         data['transitions'] = final_transitions
         data['start_state'] = start_state
         data['accept_states'] = sorted(list(accept_states))
+        data['alphabet'] = alphabet
         
         return DFA(**data)
 
