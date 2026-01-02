@@ -46,18 +46,18 @@ class DFARepairEngine:
             for s in clean_states:
                 if s not in transitions: transitions[s] = {}
 
+            # Enforce strict STARTS_WITH behavior: overwrite any LLM-provided
+            # transitions on the matching chain so a non-matching symbol goes
+            # directly to q_dead (ensures only prefix match, not anywhere-in)
             for i, st in enumerate(required[:-1]):
                 char = target[i]
-                # Prefer LLM-provided transitions; only fill missing entries.
-                transitions[st].setdefault(char, required[i+1])
+                transitions[st][char] = required[i+1]
                 for c in alphabet:
                     if c != char:
-                        transitions[st].setdefault(c, "q_dead")
+                        transitions[st][c] = "q_dead"
 
-            # Ensure final (accept) state loops to itself for missing symbols
-            transitions.setdefault(final, {})
-            for c in alphabet:
-                transitions[final].setdefault(c, final)
+            # Ensure final (accept) state loops to itself
+            transitions[final] = {c: final for c in alphabet}
 
         elif (type_str == "ENDS_WITH" or type_str == "NOT_ENDS_WITH") and target:
             # Rebuild states strictly: q0..qN where N=len(target)
@@ -96,7 +96,7 @@ class DFARepairEngine:
                 accept_states = set(chain_states[:-1])
 
         elif type_str == "CONTAINS" and target:
-            # Rebuild chain
+            # Build KMP-style automaton for CONTAINS so partial overlaps are handled
             chain_states = [start_state]
             for i in range(len(target)):
                 st = f"q{i+1}"
@@ -104,21 +104,26 @@ class DFARepairEngine:
                 chain_states.append(st)
             final_state = chain_states[-1]
             accept_states = {final_state}
-            
-            for i, current_st in enumerate(chain_states[:-1]):
-                match_char = target[i]
-                next_st = chain_states[i+1]
-                
+
+            # KMP-style transitions: for each state (matched prefix length i),
+            # and each character, compute the longest suffix of (prefix + char)
+            # that is a prefix of target, then transition to that state.
+            for i, current_st in enumerate(chain_states):
+                current_prefix = target[:i]
                 if current_st not in transitions: transitions[current_st] = {}
-                transitions[current_st][match_char] = next_st
-                
+
                 for char in alphabet:
-                    if char != match_char:
-                        # Backtracking logic for CONTAINS is tricky (often simpler to just reset to start for short targets)
-                        # but correct KMP is better. For simplicity/robustness on 'a'/'b':
-                        transitions[current_st][char] = start_state 
-            
-            # Trap Accept
+                    candidate = current_prefix + char
+                    while len(candidate) > 0 and not target.startswith(candidate):
+                        candidate = candidate[1:]
+
+                    next_index = len(candidate)
+                    if next_index < len(chain_states):
+                        transitions[current_st][char] = chain_states[next_index]
+                    else:
+                        transitions[current_st][char] = chain_states[0]
+
+            # Once accept state reached, stay in accept (trap)
             transitions[final_state] = {c: final_state for c in alphabet}
 
         elif type_str == "DIVISIBLE_BY" and target.isdigit():

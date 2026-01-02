@@ -36,8 +36,8 @@ class DeterministicValidator:
             actual = (curr in dfa.accept_states) and not crashed
             
             if expected != actual:
-                print(f"   [MISMATCH] Input: '{s}' | DFA: {actual} | Truth: {expected}")
-                error_log.append(f"FAIL: '{s}' -> Got {actual}, Expected {expected}")
+                    print(f"   [MISMATCH] Input: '{s}' | DFA: {actual} | Truth: {expected}")
+                    error_log.append(f"FAIL: '{s}' -> Got {actual}, Expected {expected}")
 
         if not error_log:
             print("   -> PASSED.")
