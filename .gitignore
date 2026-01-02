@@ -3,3 +3,30 @@ __pycache__/
 .pytest_cache/
 *.pyc
 dfa_result.png
+
+# Editor / OS
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Python environment
+env/
+venv/
+pip-wheel-metadata/
+__pypackages__/
+
+# Test artifacts
+pytestdebug.log
+coverage.xml
+.coverage
+
+# Build / output
+backend/output/
+backend/python_imply/output/
+node_modules/
+dist/
+build/
+
+# Local debug scripts (not required in repo)
+backend/scripts/debug_repair.py
