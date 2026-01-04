@@ -28,27 +28,30 @@ class AnalystAgent(BaseAgent):
     def analyze(self, user_prompt: str) -> LogicSpec:
         print(f"\n[Agent 1] Analyzing Request: '{user_prompt}'")
         
-        # --- 1. DETECT ALPHABET GLOBALLY ---
-        # Prefer explicit quoted characters in the prompt (e.g. '0' or 'a').
-        detected_alphabet = ['0', '1']
-        lp = user_prompt.lower()
-        if re.search(r"['\"][ab]['\"]", lp):
-            detected_alphabet = ['a', 'b']
-        elif re.search(r"['\"][01]['\"]", lp):
-            detected_alphabet = ['0', '1']
-        else:
-            # fallback: keep binary unless explicit letter targets are present
-            detected_alphabet = ['0', '1']
-        print(f"   -> Detected Alphabet: {detected_alphabet}")
-
-        # --- 2. TRY HEURISTIC (Atomic) ---
-        # Skip heuristic if complex logic keywords are present
+        # --- 1. TRY HEURISTIC (Atomic) FIRST ---
+        # This gives us better alphabet detection from the target itself
         if " and " not in user_prompt.lower() and " or " not in user_prompt.lower():
             heuristic = LogicSpec.from_prompt(user_prompt)
             if heuristic: 
                 print(f"   -> Detected Atomic: {heuristic.logic_type}")
-                heuristic.set_alphabet_recursive(detected_alphabet)
+                print(f"   -> Target: '{heuristic.target}', Alphabet: {heuristic.alphabet}")
                 return heuristic
+        
+        # --- 2. DETECT ALPHABET FOR COMPLEX LOGIC ---
+        # Only reach here for AND/OR composite expressions
+        detected_alphabet = ['0', '1']
+        lp = user_prompt.lower()
+        
+        # Check if the prompt contains letter patterns
+        if re.search(r"['\"]?[ab]+['\"]?", lp) and not re.search(r"['\"]?[01]+['\"]?", lp):
+            detected_alphabet = ['a', 'b']
+        # Check for explicit quoted patterns
+        elif re.search(r"['\"][ab]+['\"]", lp):
+            detected_alphabet = ['a', 'b']
+        elif re.search(r"['\"][01]+['\"]", lp):
+            detected_alphabet = ['0', '1']
+            
+        print(f"   -> Detected Alphabet: {detected_alphabet}")
 
        # --- 3. ASK LLM (Recursive) ---
         print("   -> Complex logic detected. Asking LLM (Relaxed Mode)...")

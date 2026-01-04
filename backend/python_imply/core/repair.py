@@ -5,9 +5,18 @@ from .optimizer import DFAOptimizer, cleanup_dfa
 class DFARepairEngine:
     def auto_repair_dfa(self, data: dict, spec: LogicSpec) -> DFA:
         states = set(data.get('states', []))
-        transitions = data.get('transitions', {})
-        alphabet = spec.alphabet
+        alphabet = spec.alphabet  # Always use spec's alphabet
         accept_states = set(data.get('accept_states', []))
+        
+        # --- Clean transitions: remove any symbols not in our alphabet ---
+        raw_transitions = data.get('transitions', {})
+        transitions = {}
+        for state, trans_map in raw_transitions.items():
+            transitions[state] = {}
+            for symbol, dest in trans_map.items():
+                # Only keep transitions with valid alphabet symbols
+                if symbol in alphabet:
+                    transitions[state][symbol] = dest
 
         # --- Basic Cleanup ---
         clean_states = sorted([s for s in states if len(s) < 15 and " " not in s])

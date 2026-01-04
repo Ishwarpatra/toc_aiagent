@@ -1,7 +1,16 @@
-// frontend/src/App.jsx
+// frontend/src/App.jsx - Professional DFA Editor
 import { useState } from "react";
-import Toolbar from "./components/Toolbar";
 import Canvas from "./components/Canvas";
+import "./App.css";
+
+// Example prompts for quick selection
+const EXAMPLE_PROMPTS = [
+  "ends with 'a'",
+  "contains '01'",
+  "starts with 'ab'",
+  "even number of 1s",
+  "divisible by 3",
+];
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
@@ -9,69 +18,114 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handlePlay = async () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      // 1. Corrected the variable to 'prompt'
-      // 2. Added the missing 'try' block
       const response = await fetch("http://localhost:8000/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt }), 
+        body: JSON.stringify({ prompt: prompt }),
       });
 
-      if (!response.ok) throw new Error("Backend connection failed");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail?.error || "Backend connection failed");
+      }
 
       const data = await response.json();
-      setDfaData(data); 
+      setDfaData(data);
     } catch (err) {
       console.error(err);
-      setError("Error: Ensure the Python API is running on port 8000.");
+      setError(err.message || "Error: Ensure the Python API is running on port 8000.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleExampleClick = (example) => {
+    setPrompt(example);
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && e.ctrlKey) {
+      handleGenerate();
+    }
+  };
+
   return (
-    <div style={{ height: "100vh", width: "100vw", display: "flex", flexDirection: "column", background: "#ffffff", overflow: "hidden" }}>
-      
-      {/* Question Area (Top Bar) */}
-      <div style={{ padding: "10px 20px", borderBottom: "1px solid #ddd", display: "flex", gap: "10px", alignItems: "center", background: "#f8f9fa" }}>
-        <span style={{ fontWeight: "bold" }}>Auto-DFA</span>
-        <input 
-          type="text" 
-          placeholder="Describe your DFA (e.g. 'ends with a')" 
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          style={{ flex: 1, padding: "8px", borderRadius: "4px", border: "1px solid #ccc", fontSize: "1rem" }}
-        />
-      </div>
+    <div className="app-container">
+      <div className="main-workspace">
+        {/* Left Sidebar - Question Input */}
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <div className="sidebar-logo">
+              <span className="sidebar-logo-icon">◊</span>
+              Auto-DFA
+            </div>
+            <div className="sidebar-subtitle">AI-Powered State Machine Generator</div>
+          </div>
 
-      {/* Main Workspace */}
-      <div style={{ flex: 1, display: "flex", background: "#ffffff", minHeight: 0 }}>
-        <Toolbar />
+          <div className="sidebar-content">
+            {/* Prompt Input */}
+            <div className="prompt-section">
+              <label className="section-label">Describe Your DFA</label>
+              <textarea
+                className="prompt-textarea"
+                placeholder="Enter a natural language description...
+
+Examples:
+• Strings ending with 'a'
+• Contains substring '01'
+• Even number of 1s
+• Divisible by 3"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handleKeyPress}
+              />
+
+              <button
+                className="generate-btn"
+                onClick={handleGenerate}
+                disabled={loading || !prompt.trim()}
+              >
+                {loading ? (
+                  <>
+                    <span className="generate-btn-icon">⟳</span>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <span className="generate-btn-icon">⚡</span>
+                    Generate DFA
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Quick Examples */}
+            <div className="examples-section">
+              <label className="section-label">Quick Examples</label>
+              <div className="examples-list">
+                {EXAMPLE_PROMPTS.map((example, index) => (
+                  <button
+                    key={index}
+                    className="example-chip"
+                    onClick={() => handleExampleClick(example)}
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Canvas - No bottom bar anymore */}
         <Canvas data={dfaData} loading={loading} error={error} />
-      </div>
-
-      {/* Generation Button */}
-      <div
-        onClick={handlePlay}
-        style={{
-          height: "50px",
-          background: loading ? "#555" : "#222",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: loading ? "wait" : "pointer",
-          transition: "background 0.3s"
-        }}
-      >
-        {loading ? "Generating DFA..." : "▶ Play (Generate)"}
       </div>
     </div>
   );
