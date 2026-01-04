@@ -63,10 +63,18 @@ class LogicSpec(BaseModel):
         elif "not contain" in user_lower: deduced_type = "NOT_CONTAINS"
         elif "contain" in user_lower: deduced_type = "CONTAINS"
 
-        # Regex Target Extraction
+        # Regex Target Extraction - Enhanced for both quoted and unquoted
         if not deduced_target and deduced_type and deduced_type not in ["DIVISIBLE_BY", "ODD_COUNT", "EVEN_COUNT"]:
-             quote_match = re.search(r"['\"]([01ab]+)['\"]", user_lower)
-             if quote_match: deduced_target = quote_match.group(1)
+            # First try quoted targets like 'a' or "ab"
+            quote_match = re.search(r"['\"]([01ab]+)['\"]", user_lower)
+            if quote_match: 
+                deduced_target = quote_match.group(1)
+            else:
+                # Try unquoted patterns: "ends with a", "starts with ab", "contains 01"
+                # Look for pattern words followed by single letter or digit sequence
+                unquoted_match = re.search(r"(?:with|contains?)\s+([01ab]+)\b", user_lower)
+                if unquoted_match:
+                    deduced_target = unquoted_match.group(1)
 
         if deduced_type and deduced_target:
             if re.search(r"[a-z]", deduced_target): deduced_alphabet = ['a', 'b']

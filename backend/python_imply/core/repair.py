@@ -1,5 +1,6 @@
 from typing import Optional, List
 from .models import DFA, LogicSpec
+from .optimizer import DFAOptimizer, cleanup_dfa
 
 class DFARepairEngine:
     def auto_repair_dfa(self, data: dict, spec: LogicSpec) -> DFA:
@@ -166,7 +167,7 @@ class DFARepairEngine:
             # Ensure completeness
             for c in alphabet:
                 if c not in transitions[s]:
-                    transitions[s][c] = start_state
+                    transitions[s][c] = "q_dead"  # Route undefined transitions to dead state
             final_transitions[s] = transitions[s]
 
         data['states'] = sorted(list(set(clean_states)))
@@ -175,7 +176,14 @@ class DFARepairEngine:
         data['accept_states'] = sorted(list(accept_states))
         data['alphabet'] = alphabet
         
-        return DFA(**data)
+        # Build initial DFA
+        raw_dfa = DFA(**data)
+        
+        # --- Optimization Pass: Remove unreachable and non-productive states ---
+        # This removes dead states that have no path from start state
+        optimized_dfa = cleanup_dfa(raw_dfa, verbose=True)
+        
+        return optimized_dfa
 
     def try_inversion_fix(self, dfa: DFA, spec: LogicSpec, validator_instance) -> Optional[DFA]:
         # Simple inversion attempt

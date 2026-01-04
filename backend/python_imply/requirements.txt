@@ -1,0 +1,10 @@
+# FastAPI Server
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+
+# AI/LLM
+ollama>=0.1.0
+
+# Visualization
+graphviz>=0.20.0
