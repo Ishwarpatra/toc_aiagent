@@ -1,85 +1,116 @@
-# Auto-DFA 🤖
-### A Multi-Agent AI System for Visualizing Theory of Computation
+```markdown
+# Auto-DFA — README (Updated)
 
-**Auto-DFA** is a local, privacy-focused software tool that uses a **Multi-Agent Large Language Model (LLM) architecture** to convert natural language problem statements (e.g., *"strings ending in 'ab'"*) into mathematically rigorous, visual Deterministic Finite Automata (DFA).
+This project generates deterministic finite automata (DFAs) from natural-language descriptions using a modular pipeline:
+- AnalystAgent (parse natural language -> LogicSpec)
+- ArchitectAgent (construct DFAs for atomic LogicSpecs; compose DFAs for AND/OR/NOT)
+- DeterministicValidator (check DFA against ground truth semantics)
+- Repair engine and visualizer for diagnostics
 
-![Project Status](https://img.shields.io/badge/Status-Prototype_Complete-success)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![AI Engine](https://img.shields.io/badge/AI_Engine-Ollama-orange)
+This README section documents newly added natural-language forms, parsing rules, configuration, and examples.
 
----
+## New Natural-Language Patterns Supported
 
-## 📖 Table of Contents
-- [Executive Summary](#-executive-summary)
-- [Problem Statement](#-problem-statement)
-- [System Architecture](#-system-architecture)
-- [Tech Stack](#-tech-stack)
-- [Installation & Setup](#-installation--setup)
-- [How to Run](#-how-to-run)
-- [Troubleshooting](#-troubleshooting)
+You can now express a broad set of constraints directly in the prompt. The parser recognizes the following atomic forms (examples shown):
 
----
+Pattern-based (string-pattern recognition)
+- Starts with a prefix:
+  - "starts with '101'" → STARTS_WITH target "101"
+  - "begin with 01"
+- Ends with a suffix:
+  - "ends with '01'" → ENDS_WITH target "01"
+- Contains a substring:
+  - "contains '110'" → CONTAINS target "110"
+- Does not contain a substring:
+  - "does not contain '00'" → NOT_CONTAINS target "00"
+- No consecutive symbol:
+  - "no consecutive '1'" → NO_CONSECUTIVE target "1"
 
-## 🚀 Executive Summary
-Students often struggle to visualize abstract concepts in **Theory of Computation (ToC)**. Existing tools (like JFLAP) require manual input and do not assist with the *logic* of design. 
+Mathematical & numerical constraints
+- Divisibility:
+  - "divisible by 3" → DIVISIBLE_BY target "3" (binary/decimal mapping rules apply, see Alphabet rules)
+  - "even number" → shorthand for DIVISIBLE_BY 2
+- Product parity:
+  - "product is even" → PRODUCT_EVEN (accepts strings whose digit-product parity is even; implemented conservatively)
+- Count modulo (number of occurrences modulo k):
+  - "count of 1s mod 3 = 2" → COUNT_MOD target "1:2:3" (symbol:r:k)
+- Even/Odd counts:
+  - "even number of 1s" → EVEN_COUNT target "1"
+  - "odd number of a's" → ODD_COUNT target "a"
 
-**Auto-DFA** solves this by employing a "Teacher-Architect-Tester" loop. It uses small, efficient local LLMs (`qwen2.5-coder`) to design the logic, but relies on **deterministic Python code** to verify that logic, ensuring 100% mathematical accuracy before rendering the final graph.
+Length-based constraints
+- Exact length:
+  - "length is 5" or "strings of length 5" → EXACT_LENGTH target "5"
+- Minimum / maximum:
+  - "at least 3 characters" → MIN_LENGTH target "3"
+  - "at most 7 characters" → MAX_LENGTH target "7"
+- Length modulo:
+  - "length mod 3 = 1" or "len % 3 == 1" → LENGTH_MOD target "1:3" (r:k)
 
----
+Compositions (AND / OR / NOT)
+- Simple multi-clause composition is supported locally:
+  - "starts with '101' and divisible by 3 and contains '11'"
+  - "(contains '11' or ends with '01') and not contain '00'"
+- The parser attempts a conservative local split on top-level "and" / "or". If an expression is ambiguous or too complex, the system falls back to the LLM-based analyzer.
 
-## 🎯 Problem Statement
-* **The Challenge:** Designing DFAs requires strict precision. Novice students often miss edge cases (e.g., dead states, resetting transitions).
-* **The Solution:** An AI assistant that doesn't just give the answer but "thinks" through the design, verifies it against ground-truth code, and renders the visual graph automatically.
+## Alphabet & Mapping Rules (important for numeric checks)
 
----
+To interpret numeric properties (DIVISIBLE_BY, even/odd, product parity), the system must map string symbols to digits. The rules are conservative:
 
-## 🏗 System Architecture
+- If the alphabet is exactly ['0','1']: treat inputs as binary (base=2).
+- If alphabet contains exactly two single-character symbols (e.g., ['a','b']): map alphabet[0] -> 0 and alphabet[1] -> 1 (binary semantics).
+- If all alphabet symbols are decimal digits: treat as decimal (base=10).
+- Otherwise: DIVISIBLE_BY and numeric checks are not supported and will yield an error (the system avoids making unsafe assumptions).
+- Single-letter target assumption: if the user writes a single letter symbol like 'a' and does not specify alphabet, the parser assumes a paired alphabet ['a','b'] (similarly '0' implies ['0','1']) — this behavior aims to reduce ambiguous prompts and can be overridden by explicitly specifying the alphabet in a follow-up prompt.
 
-The system uses an **Iterative Feedback Loop** consisting of three specialized AI agents and one deterministic code engine.
+## Safety / Performance: Product-size Threshold
 
-### The Agent Roles
+Composing DFAs (via product construction for AND/OR) multiplies state counts. To avoid combinatorial blow-ups:
 
-* **Agent 1: The Analyst**
-    * **Engine:** Qwen 2.5-Coder (1.5B)
-    * **Responsibility:** Parses user text into formal set-builder notation ($L=\{w | ...\}$) and constraints.
+- The system uses an estimated product-size upper bound before building large compositions.
+- Default safety threshold: AUTO_DFA_MAX_PRODUCT_STATES = 2000 (configurable via environment variable or CLI).
+- If the estimated product size exceeds the threshold, architect returns an informative error suggesting you simplify constraints or adjust the threshold.
+- You can override behavior by setting the environment variable or passing --max-product-states to the CLI.
 
-* **Agent 2: The Architect**
-    * **Engine:** Qwen 2.5-Coder (1.5B)
-    * **Responsibility:** Converts requirements into a JSON structure defining States ($Q$), Alphabet ($\Sigma$), and Transitions ($\delta$).
+## CLI / ENV
 
-* **Agent 3: The Validator**
-    * **Engine:** Python Code (Ground Truth)
-    * **Responsibility:** Generates test strings and uses deterministic logic (e.g., `string.endswith()`) to strictly grade Agent 2's work.
+- Model (LLM) name (if using Ollama): AUTO_DFA_MODEL (default: qwen2.5-coder:1.5b)
+- Max product states threshold: AUTO_DFA_MAX_PRODUCT_STATES (default: 2000)
 
-### The "Self-Healing" Workflow
-1.  **Drafting:** Agent 2 creates the initial JSON structure.
-2.  **Auto-Repair:** Python script detects missing transitions and routes them to the start state (Reset Logic).
-3.  **Verification:** Python runs a simulation against test cases. If a test fails, the error log is fed back to Agent 2.
-4.  **Visualization:** Graphviz renders the final valid `.dot` file to a PNG image.
-
----
-
-## 🛠 Tech Stack
-* **Language:** Python 3.10+
-* **Local Inference:** [Ollama](https://ollama.com/)
-* **AI Model:** `qwen2.5-coder:1.5b` (Optimized for logic/code)
-* **Data Validation:** [Pydantic](https://docs.pydantic.dev/) (Enforces strict JSON schemas)
-* **Visualization:** [Graphviz](https://graphviz.org/)
-
----
-
-## ⚙ Installation & Setup
-
-### 1. Install Prerequisites
-* **Python:** Ensure Python 3.10 or newer is installed.
-* **Graphviz:** Download and install [Graphviz for Windows](https://graphviz.org/download/).  
-    * *Critical:* Select **"Add Graphviz to the system PATH for all users"** during installation.
-* **Ollama:** Download from [ollama.com](https://ollama.com).
-
-### 2. Clone the Project
+Example: run the CLI with a custom threshold
 ```bash
-mkdir Auto-DFA
-cd Auto-DFA
-python -m venv .venv
-# Activate Virtual Environment (Windows)
-.\.venv\Scripts\Activate
+python backend/python_imply/main.py --max-product-states 5000 --prompt "starts with '101' and divisible by 3"
+```
+
+## Examples (prompts you can try)
+- starts with '101'
+- contains '110'
+- does not contain '00'
+- even number of 1s
+- divisible by 3
+- length is 5
+- length mod 3 = 1
+- count of 1s mod 3 = 2
+- starts with '101' and divisible by 3 and contains '11'
+
+## Testing & Development
+
+Run the Python unit tests:
+```bash
+cd backend/python_imply
+pytest -q
+```
+
+If you rely on Ollama or another LLM, wire the BaseAgent.call_ollama method to your client so the LLM fallback path works.
+
+## Notes / Limitations
+
+- The NL parser is intentionally conservative. For complex nested boolean logic or ambiguous phrasing the system will either:
+  - fall back to the LLM-based analyzer (if configured), or
+  - ask for clarification.
+- Non-regular properties (primality, perfect square, general factorization) are not supported because DFAs cannot decide those languages for arbitrary-length inputs.
+
+## Contributing
+
+Please add tests for new natural-language variants you expect, and open PRs for refinements or additional parsing patterns.
+```
