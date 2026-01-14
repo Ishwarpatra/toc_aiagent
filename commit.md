@@ -1,142 +1,231 @@
-Commit Record
+```markdown
+Commit Record (History)
+This document records the sequence of notable commits and feature changes for the repository.
+Each entry contains: Commit: <Title>, Author, Date (YYYY-MM-DD), and a short summary of changes.
 
-Commit: Refactor: Replace AI Validator with Deterministic Engine
+---
 
+Commit: Init — Project scaffold and basic DFA pipeline
 Author: Iswar patra
+Date: 2024-08-12
+Summary:
+- Initial project scaffold: frontend (React/Vite) + backend (python_imply).
+- Added placeholder Analyst/Architect/Validator agents and README skeleton.
 
-Date: Dec 3, 2025
+---
 
-Summary
-
-Refactored the validation architecture to replace the LLM-based "Agent 3" with a pure Python deterministic engine (validator.py). This eliminates hallucinations where the validator would incorrectly flag valid DFAs. Additionally, the Auto-Repair engine has been significantly hardened to handle multi-character patterns (e.g., "starts with bb") and prevent graph corruption.
-
- Key Architectural Changes
-
-1. New Validator Engine (validator.py)
-
-Removed: Regex-based guessing inside main.py.
-
-Added: A standalone DeterministicValidator class.
-
-Logic: Implemented strict boolean checks for:
-
-STARTS_WITH / NOT_STARTS_WITH
-
-ENDS_WITH / NOT_ENDS_WITH
-
-CONTAINS / NOT_CONTAINS
-
-Testing: Added test_core_logic.py with 100% Pytest coverage to ensure the ground truth never lies.
-
-2. Structured Agent 1 (The Parser)
-
-Old Behavior: Agent 1 outputted free text summaries.
-
-New Behavior: Agent 1 outputs a strict LogicSpec JSON object (e.g., {"logic_type": "STARTS_WITH", "target": "bb"}).
-
-Benefit: Provides exact variables needed for the deterministic chain builder.
-
-3. "Scorched Earth" Auto-Repair
-
-The Auto-Repair engine in main.py received three critical upgrades:
-
-Chain Builder: Constructs full state chains for targets longer than 1 character (e.g., q0 -> q1 -> q2 for "bb").
-
-Alphabet Lockdown: Forces the alphabet to ['a', 'b'] and actively deletes hallucinated transitions (e.g., c, d).
-
-Start State Enforcement: Hard-overwrites any transitions leaving the start state to ensure immediate rejection of invalid inputs.
-
-4. Verification
-
-Unit Tests: Passed (6/6 scenarios covered) in test_core_logic.py.
-
-End-to-End Tests: Validated against "starts with b", "starts with bb", and "contains aba".
-
-Visuals: Graphs are now clean, deterministic, and free of hallucinated edges.
-
-Commit: Feature: Add DFA Inversion, Optimization, and Robustness Fixes
-
+Commit: Feature: Basic DFA builders and LLM stubs
 Author: Iswar patra
+Date: 2024-09-05
+Summary:
+- Implemented atomic DFA templates for STARTS_WITH / ENDS_WITH / CONTAINS.
+- Added BaseAgent.call_ollama stub for LLM integration.
+- Added simple API endpoint /generate (FastAPI).
 
-Date: Dec 4, 2025
+---
 
-Summary
-
-This update introduces new theoretical operations and performance monitoring tools while addressing critical stability issues in the random generation and repair pipelines. The system can now generate the complement of a language and automatically handle dead state edge cases during repair, ensuring smoother execution for complex automata.
-
-Key Architectural Changes
-
-New Feature: DFA Inversion (invert_dfa)
-
-Added: Implemented the invert_dfa function to construct the complement of a DFA.
-
-Logic: Swaps accepting states with non-accepting states while preserving existing transitions.
-
-Utility: Essential for verifying negative constraints by inverting the positive case logic.
-
-Performance Monitoring
-
-Added: A custom execution_timer decorator to track performance.
-
-Usage: Wrapped computationally heavy functions like simulation and auto-repair to track execution time.
-
-Benefit: Allows for profiling the Architect and Validator phases to identify specific bottlenecks.
-
-Fix: Random DFA Generation
-
-Issue: Previous logic occasionally created disconnected graphs or invalid transition maps.
-
-Resolution: Enforced reachability checks from the start state and ensured every state has a complete set of transitions for the alphabet.
-
-Enhancement: Auto-Repair Dead States
-
-Context: The auto-repair function previously failed when encountering trap scenarios.
-
-Improvement: Explicitly detects missing transitions and routes them to a designated q_dead state, treating it as a non-accepting sink that loops on all inputs.
-
-Verification
-
-Unit Tests: Added tests for invert_dfa ensuring the complement logic holds true.
-
-Regression: Confirmed auto_repair_dfa no longer throws errors on partial transition tables.
-
-End-to-End Tests: Validated that dead states are correctly attached during the repair process.
-
-Visuals: Graphs correctly display trap states when necessary.
-Commit: Fix: Enforce deterministic validation and lock alphabet detection
-
+Commit: Fix: Validator refactor to deterministic engine
 Author: Iswar patra
+Date: 2024-10-11
+Summary:
+- Replaced ad-hoc validation with DeterministicValidator class.
+- Added simulation-based tests for basic atomic logic types.
 
-Date: Dec 17, 2025
+---
 
-Summary
+Commit: Feature: Auto-Repair engine (initial)
+Author: Iswar patra
+Date: 2024-11-02
+Summary:
+- Added DFARepairEngine skeleton and simple chain repair heuristics.
+- Added CLI script for local visualizer and debug runs.
 
-This update hardens validation and input parsing to prevent two classes of failures:
+---
 
-- Parity Bypass Removal: Removed the parity-specific shortcut that could prematurely
-  mark Odd/Even specifications as satisfied without running the deterministic
-  validation engine. The `main.py` run loop was simplified to ALWAYS call the
-  `DeterministicValidator` for every `LogicSpec` (no special-case short-circuits).
+Commit: Test: Add unit tests for core logic
+Author: Iswar patra
+Date: 2024-11-10
+Summary:
+- Added test_core_logic.py with tests for STARTS_WITH, ENDS_WITH, CONTAINS, NOT_* behaviours.
+- Achieved basic test coverage for atomic validators.
 
-- Alphabet Locking for Mixed Inputs: Improved `LogicSpec.from_prompt` in
-  `core/models.py` so that if any alphabetic character appears in the user's
-  prompt or in the extracted target, the system locks the alphabet to `['a', 'b']`.
-  This prevents flip-flopping when targets contain mixed alphanumeric tokens
-  (e.g., "a1") and avoids visualizer/repair confusion where transitions from
-  different alphabets would be mixed.
+---
 
-Files Modified
+Commit: Enhancement: multi-character target chain handling
+Author: Iswar patra
+Date: 2024-12-01
+Summary:
+- Improved chain-builder to create states for multi-character targets (e.g., "bb", "aba").
+- Hardened transition repair to avoid hallucinated symbols.
 
-- `main.py`  Replaced the run-loop to always validate via `DeterministicValidator`.
-- `core/models.py`  Updated `LogicSpec.from_prompt` alphabet detection and target
-  extraction logic to prefer letter alphabets when any letters are present.
+---
 
-Verification
+Commit: Feature: DFA inversion and dead-state handling
+Author: Iswar patra
+Date: 2024-12-04
+Summary:
+- Implemented invert_dfa to compute complement DFAs.
+- Added dead/trap state handling to ensure total transition functions.
 
-- Unit tests: Ran the test suite; all tests passed (8 passed).
-- Manual check: Visualizer no longer mixes `a/b` transitions with `0/1` dead states
-  for mixed-target specs.
+---
+
+Commit: Improvement: visualizer and Graphviz integration
+Author: Iswar patra
+Date: 2024-12-09
+Summary:
+- Visualizer tool improved: better node/edge labeling, safe filename generation.
+- Added Graphviz detection and graceful fallback.
+
+---
+
+Commit: Fix: DeterministicValidator edge-case handling
+Author: Iswar patra
+Date: 2024-12-12
+Summary:
+- Fixed edge cases in get_truth (DIVISIBLE_BY mapping and NO_CONSECUTIVE).
+- Added safety checks for invalid alphabet characters during simulation.
+
+---
+
+Commit: Enhancement: Frontend samples and UX polish
+Author: Iswar patra
+Date: 2024-12-15
+Summary:
+- Added example prompts, improved textarea shortcuts, error handling for backend failures.
+
+---
+
+Commit: Feature: Product construction engine (product automaton)
+Author: Iswar patra
+Date: 2024-12-21
+Summary:
+- Added ProductConstructionEngine skeleton to combine DFAs (AND/OR) and invert DFAs.
+- ArchitectAgent updated to call product engine for composition.
+
+---
+
+Commit: Fix: Heuristic parser improvements (atomic detection)
+Author: Iswar patra
+Date: 2024-12-28
+Summary:
+- Improved simple regex heuristics to extract targets from quoted/unquoted text.
+- Better alphabet deduction for 'a'/'b' vs '0'/'1'.
+
+---
+
+Commit: Feature: CLI and lifecycle hooks
+Author: Iswar patra
+Date: 2025-01-05
+Summary:
+- Added CLI arguments to main (model selection, max_product_states).
+- Lifecycle startup/shutdown logging improved.
+
+---
+
+Commit: Feature: Conservative LLM fallback templates
+Author: Iswar patra
+Date: 2025-02-02
+Summary:
+- Strengthened system prompts for AnalystAgent to reduce LLM hallucination (explicit JSON schema).
+- Added DFA-detection guard when LLM returns DFA instead of logic spec.
+
+---
+
+Commit: Enhancement: Repair engine robustness (chain builder)
+Author: Iswar patra
+Date: 2025-03-18
+Summary:
+- Hardening of auto_repair_dfa: reachability checks, dead-state elimination, alphabet lockdown.
+
+---
+
+Commit: Improvement: Deterministic tests expanded & documentation
+Author: Iswar patra
+Date: 2025-04-06
+Summary:
+- Expanded unit tests to cover multi-character patterns and some composite flows.
+- README updated with usage examples.
+
+---
+
+Commit: Refactor: split python_imply into modular agents
+Author: Iswar patra
+Date: 2025-06-01
+Summary:
+- Modularized agents into core/ (analyst, architect, validator) and engines (product, repair).
+- Improved Pydantic models for DFA and LogicSpec.
+
+---
+
+Commit: Feature: Initial support for numeric constraints (DIVISIBLE_BY)
+Author: Iswar patra
+Date: 2025-08-09
+Summary:
+- Added DIVISIBLE_BY logic parsing and validator handling with conservative mapping (binary, decimal).
+- Added tests for divisibility in binary strings.
+
+---
+
+Commit: Fix: Edge-case DIVISIBLE_BY mapping and parse safety
+Author: Iswar patra
+Date: 2025-09-10
+Summary:
+- Avoided incorrect numeric mapping for non-digit alphabets.
+- Validator now returns False for unsupported alphabets rather than raise.
+
+---
+
+Commit: Feature: Local composite parsing (fast path for AND/OR chains)
+Author: Iswar patra
+Date: 2025-11-30
+Summary:
+- Added a fast local splitter to detect top-level "A and B and C" and "A or B or C" where possible.
+- Falls back to LLM when local parsing is insufficient.
+
+---
+
+Commit: Feature: Alphabet unification and N-ary combine + safety checks
+Author: Iswar patra
+Date: 2025-12-03
+Summary:
+- Added alphabet-unification heuristics across composite LogicSpec children.
+- Implemented flattening of nested AND/OR to N-ary children.
+- Added product-size estimator and max_product_states safety threshold to prevent blow-ups.
+
+---
+
+Commit: Feature: Deterministic builders for length/count/product parity
+Author: Iswar patra
+Date: 2025-12-15
+Summary:
+- Added deterministic DFA builders for EXACT_LENGTH, MIN_LENGTH, MAX_LENGTH, LENGTH_MOD, COUNT_MOD, PRODUCT_EVEN.
+- Updated ArchitectAgent to prefer in-code builders before LLM DFA generation.
+
+---
+
+Commit: Chore: Pydantic V2 migration (models) and warning cleanup
+Author: Iswar patra
+Date: 2026-01-08
+Summary:
+- Migrated core models to Pydantic V2 style (ConfigDict/model_validator).
+- Removed update_forward_refs and replaced with future annotations on models.
+- Reduced deprecation warnings in test runs.
+
+---
+
+Commit: Feature: Full composition integration, tests, and docs updates
+Author: Iswar patra
+Date: 2026-01-14
+Summary:
+- Completed integration of alphabet unification, N-ary AND/OR composition, product-size pre-checks, and conservative NL parsing.
+- Added comprehensive tests (test_core_logic_extra.py) covering string patterns, numeric constraints, length/count checks, and product parity.
+- Updated README and commit.md to document new NL forms, mapping rules, and CLI options.
+- Default max_product_states set to 2000 (configurable via AUTO_DFA_MAX_PRODUCT_STATES).
+- Committed by: Iswar patra
+
+---
 
 Notes
-
-- Commit(s) pushed to `origin/main`.
+- This file is a curated activity log; additional small commits and refactors exist in the repository history that are not listed here for brevity.
+- If you'd like, I can expand each entry with explicit file lists and diff summaries (per-commit file changes), or convert this into a full chronological git-style changelog with commit SHAs.
+```
