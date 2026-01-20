@@ -156,24 +156,62 @@ def estimate_states_for_spec(spec: LogicSpec) -> int:
 
 
 def build_starts_with_dfa(alphabet: List[str], pattern: str) -> Dict:
-    states = [f"q{i}" for i in range(len(pattern) + 1)]
+    """
+    Build a DFA that accepts strings starting with the given pattern.
+    
+    States: q0, q1, ..., q{len(pattern)} (accept), and q_dead (reject sink)
+    - On matching the prefix, we reach the accept state and stay there.
+    - On mismatch before reaching accept, we go to dead state.
+    """
+    n = len(pattern)
+    
+    # States: q0 to q{n} for matching progress, plus q_dead for rejection
+    states = [f"q{i}" for i in range(n + 1)] + ["q_dead"]
     start = "q0"
-    accept = [f"q{len(pattern)}"]
+    accept_state = f"q{n}"
+    accept = [accept_state]
+    
     transitions = {s: {} for s in states}
-    for i in range(len(pattern) + 1):
+    
+    # Transitions for matching states (q0 to q{n-1})
+    for i in range(n):
+        current = f"q{i}"
         for sym in alphabet:
-            if i < len(pattern) and sym == pattern[i]:
-                transitions[f"q{i}"][sym] = f"q{i+1}"
+            if sym == pattern[i]:
+                # Match: advance to next state
+                transitions[current][sym] = f"q{i+1}"
             else:
-                transitions[f"q{i}"][sym] = "q0"
-    return {"states": states, "alphabet": alphabet, "start_state": start, "accept_states": accept, "transitions": transitions}
+                # Mismatch: go to dead state permanently
+                transitions[current][sym] = "q_dead"
+    
+    # Accept state: once we've matched the prefix, any symbol keeps us accepting
+    for sym in alphabet:
+        transitions[accept_state][sym] = accept_state
+    
+    # Dead state: sink - all transitions loop back
+    for sym in alphabet:
+        transitions["q_dead"][sym] = "q_dead"
+    
+    return {
+        "states": states, 
+        "alphabet": alphabet, 
+        "start_state": start, 
+        "accept_states": accept, 
+        "transitions": transitions
+    }
 
 
 def build_substring_dfa(alphabet: List[str], pattern: str, match_at_end_only: bool = False, sink_on_full: bool = False) -> Dict:
+    """
+    Build a DFA that matches strings containing the given pattern.
+    
+    - match_at_end_only=True: for ENDS_WITH (only accept if pattern is at end)
+    - sink_on_full=True: for NOT_CONTAINS (trap on match, for later inversion)
+    - Default (both False): for CONTAINS (accept and stay accepted once pattern found)
+    """
     m = len(pattern)
-    states = [f"q{i}" for i in range(m + (1 if sink_on_full else 0) + 1)]
-    # Use a simple KMP-like next-state behaviour (conservative)
-    transitions = {}
+    
+    # Build KMP failure function for efficient transitions
     pi = [0] * m
     k = 0
     for i in range(1, m):
@@ -183,40 +221,64 @@ def build_substring_dfa(alphabet: List[str], pattern: str, match_at_end_only: bo
             k += 1
         pi[i] = k
 
-    def next_len(j: int, c: str):
+    def next_len(j: int, c: str) -> int:
+        """Compute next state given current prefix length j and input symbol c."""
         while j > 0 and (j >= m or pattern[j] != c):
             j = pi[j - 1]
         if j < m and pattern[j] == c:
             return j + 1
         return j
 
-    total_states = m + 1 if not sink_on_full else m + 1 + 1
+    # Determine states needed
+    if sink_on_full:
+        # For NOT_CONTAINS: q0..q{m-1} (matching), q{m} (matched=sink=reject)
+        total_states = m + 1
+    else:
+        # q0..q{m} where q{m} is accept
+        total_states = m + 1
+    
+    states = [f"q{i}" for i in range(total_states)]
+    transitions = {s: {} for s in states}
+    accept_state = f"q{m}"
+    
+    # Build transitions
     for j in range(total_states):
         name = f"q{j}"
-        transitions[name] = {}
         for sym in alphabet:
-            if sink_on_full and j == m + 1:
-                transitions[name][sym] = name
-                continue
-            cur = j if j <= m else m
-            ns = next_len(cur, sym)
-            if ns == m:
-                if sink_on_full:
-                    transitions[name][sym] = f"q{m+1}"
+            if j == m:
+                # We're at the "pattern matched" state
+                if match_at_end_only:
+                    # For ENDS_WITH: after matching, if more input comes,
+                    # we need KMP-like fallback to handle overlapping matches
+                    ns = next_len(j, sym)
+                    transitions[name][sym] = f"q{ns}"
                 else:
-                    transitions[name][sym] = f"q{m}"
+                    # For CONTAINS / NOT_CONTAINS with sink_on_full:
+                    # Once matched, stay in this state (trap)
+                    transitions[name][sym] = name
             else:
+                ns = next_len(j, sym)
                 transitions[name][sym] = f"q{ns}"
+    
+    # Determine accept states
     if match_at_end_only:
-        accept_states = [f"q{m}"]
+        # ENDS_WITH: only accept when we've matched the pattern AND are at end
+        accept_states = [accept_state]
+    elif sink_on_full:
+        # NOT_CONTAINS: accept all EXCEPT match state (caller will invert)
+        # Actually for not_contains, we accept states where pattern NOT matched
+        accept_states = [f"q{i}" for i in range(m)]  # q0..q{m-1}
     else:
-        if sink_on_full:
-            accept_states = [f"q{i}" for i in range(m + 1)]
-            # but in sink_on_full design, we will treat q{m+1} as rejecting sink for NOT_CONTAINS
-            accept_states = [f"q{i}" for i in range(m + 1)]
-        else:
-            accept_states = [f"q{m}"]
-    return {"states": [f"q{i}" for i in range(total_states)], "alphabet": alphabet, "start_state": "q0", "accept_states": accept_states, "transitions": transitions}
+        # CONTAINS: accept once pattern is found (q{m} and stay there)
+        accept_states = [accept_state]
+    
+    return {
+        "states": states,
+        "alphabet": alphabet,
+        "start_state": "q0",
+        "accept_states": accept_states,
+        "transitions": transitions
+    }
 
 
 def build_not_contains_dfa(alphabet: List[str], pattern: str) -> Dict:
@@ -444,38 +506,77 @@ class ArchitectAgent(BaseAgent):
                 def invert(self, a): raise NotImplementedError("Product engine not available")
             self.product_engine = _PE()
 
+    def _propagate_alphabet_down(self, spec: LogicSpec, alphabet: List[str]) -> None:
+        """
+        Recursively propagate a unified alphabet DOWN to all children.
+        This ensures all partial DFAs use the same symbol set, preventing
+        alphabet mismatch crashes in ProductConstructionEngine.
+        """
+        spec.alphabet = alphabet
+        if hasattr(spec, 'children') and spec.children:
+            for child in spec.children:
+                self._propagate_alphabet_down(child, alphabet)
+
     def design(self, spec: LogicSpec) -> DFA:
+        """
+        Design a DFA from a LogicSpec. Handles composite (AND/OR/NOT) and atomic specs.
+        
+        CRITICAL: For composite operations, the unified alphabet is propagated DOWN
+        to all children BEFORE building them. This prevents alphabet mismatch errors.
+        """
         # Composite handling
         if spec.logic_type == "NOT":
             if not spec.children:
                 raise ValueError("'NOT' node missing children")
+            
+            # CRITICAL: Propagate parent's alphabet to child before building
+            full_alphabet = spec.alphabet or ['0', '1']
+            self._propagate_alphabet_down(spec.children[0], full_alphabet)
+            
             child_dfa = self.design(spec.children[0])
             return self.product_engine.invert(child_dfa)
 
         if spec.logic_type in ["AND", "OR"]:
-            # Flatten children
+            # CRITICAL FIX: Propagate unified alphabet DOWN to all children FIRST
+            # This ensures all partial DFAs speak the same language (e.g., {a, b, 0, 1})
+            full_alphabet = spec.alphabet or ['0', '1']
+            
+            # Force all direct children to inherit the unified alphabet
+            for child in spec.children:
+                self._propagate_alphabet_down(child, full_alphabet)
+            
+            # Flatten children (LogicSpec objects)
             flat = flatten_children(spec)
             if not flat:
                 flat = spec.children
+            
+            # Re-apply alphabet to flattened children (in case flattening pulled in new children)
+            for c in flat:
+                self._propagate_alphabet_down(c, full_alphabet)
+            
             # Estimate growth
             estimated = 1
             for c in flat:
                 estimated *= max(1, estimate_states_for_spec(c))
                 if estimated > self.max_product_states:
                     raise ValueError(f"Product size estimate too large: {estimated} states (threshold={self.max_product_states})")
+            
             # Build DFAs for children
             child_dfas = []
             for c in flat:
                 dfa = self.design(c)
                 child_dfas.append((c, dfa))
-            # Sort by size to combine small first
+            
+            # Sort by size to combine small first (optimization)
             child_dfas.sort(key=lambda pair: len(pair[1].states))
             current = child_dfas[0][1]
+            
             for _, nxt in child_dfas[1:]:
                 inter_est = len(current.states) * len(nxt.states)
                 if inter_est > self.max_product_states:
                     raise ValueError(f"Intermediate product would exceed safe size ({inter_est} > {self.max_product_states}).")
                 current = self.product_engine.combine(current, nxt, spec.logic_type)
+            
             return current
 
         # Atomic cases: build deterministic DFAs for common types
@@ -524,6 +625,33 @@ class ArchitectAgent(BaseAgent):
             if lt == "PRODUCT_EVEN":
                 d = build_product_even_dfa(a)
                 return DFA(**d)
+            
+            # Parity counting: EVEN_COUNT / ODD_COUNT
+            if lt in ["EVEN_COUNT", "ODD_COUNT"]:
+                # Use count_mod_k with k=2, r=0 for EVEN, r=1 for ODD
+                r = 0 if lt == "EVEN_COUNT" else 1
+                d = build_count_mod_k_dfa(a, t, k=2, r=r)
+                return DFA(**d)
+            
+            # NOT_STARTS_WITH: invert the STARTS_WITH DFA
+            if lt == "NOT_STARTS_WITH":
+                starts_dfa_dict = build_starts_with_dfa(a, t)
+                # Invert accept states
+                all_states = starts_dfa_dict["states"]
+                accept_states = starts_dfa_dict["accept_states"]
+                inverted_accept = [s for s in all_states if s not in accept_states]
+                starts_dfa_dict["accept_states"] = inverted_accept
+                return DFA(**starts_dfa_dict)
+            
+            # NOT_ENDS_WITH: invert the ENDS_WITH DFA
+            if lt == "NOT_ENDS_WITH":
+                ends_dfa_dict = build_substring_dfa(a, t, match_at_end_only=True)
+                # Invert accept states
+                all_states = ends_dfa_dict["states"]
+                accept_states = ends_dfa_dict["accept_states"]
+                inverted_accept = [s for s in all_states if s not in accept_states]
+                ends_dfa_dict["accept_states"] = inverted_accept
+                return DFA(**ends_dfa_dict)
         except Exception as e:
             logger.warning(f"[Architect] Atomic builder failed for {lt} {t}: {e}")
 
