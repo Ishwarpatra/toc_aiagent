@@ -91,8 +91,19 @@ class LogicSpec(BaseModel):
                 deduced_alphabet = [sym, 'b' if sym != 'b' else 'a']
             return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
 
-        # Even/Odd count shorthand: "even number of 1s", "odd number of a's"
-        parity_match = re.search(r"(odd|even)\s+number\s+of\s+['\"]?([0-9a-zA-Z])['\"]?s?", user_lower)
+        # Even/Odd count shorthand: 
+        # Handles: "even number of 1s", "odd number of 0", "odd count of 1", "even number of 'a's"
+        # Pattern breakdown:
+        #   (odd|even) - parity word
+        #   \s+(number|count)\s+of\s+ - "number of" or "count of"
+        #   ['\"]? - optional opening quote
+        #   ([0-9a-zA-Z]) - the character to count
+        #   ['\"]? - optional closing quote
+        #   s? - optional trailing 's' (for plurals like "1s" or "a's")
+        parity_match = re.search(
+            r"(odd|even)\s+(?:number|count)\s+of\s+['\"]?([0-9a-zA-Z])['\"]?s?",
+            user_lower
+        )
         if parity_match:
             ptype, char = parity_match.groups()
             deduced_type = "ODD_COUNT" if ptype == "odd" else "EVEN_COUNT"
