@@ -162,17 +162,11 @@ class DeterministicValidator:
                 else:
                     even_symbols = {sym for sym in alpha if sym.isdigit() and int(sym) % 2 == 0}
                 result = any(ch in even_symbols for ch in s)
-            except:
+            except Exception:
                 result = False
         elif lt == "ODD_COUNT":
             try:
-                # Special-case: for binary alphabets, interpreting ODD_COUNT
-                # as numeric oddness (LSB == '1') matches some tests.
-                alpha = spec.alphabet if getattr(spec, "alphabet", None) else None
-                if alpha and set(alpha) == set(['0', '1']) and t == '1':
-                    result = s.endswith('1')
-                else:
-                    result = s.count(t) % 2 != 0
+                result = s.count(t) % 2 != 0
             except:
                 result = False
         elif lt == "EVEN_COUNT":
