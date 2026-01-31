@@ -4,226 +4,167 @@ Each entry contains: Commit: <Title>, Author, Date (YYYY-MM-DD), and a short sum
 
 ---
 
-Commit: Init — Project scaffold and basic DFA pipeline
-Author: Iswar patra
-Date: 2024-01-04
+Commit: Refactor: Replace AI Validator with Deterministic Engine
+Author: Ishwarpatra
+Date: 2025-12-03
 Summary:
-- Initial project scaffold: frontend (React/Vite) + backend (python_imply).
-- Added placeholder Analyst/Architect/Validator agents and README skeleton.
-
----
-
-Commit: Feature: Basic DFA builders and LLM stubs
-Author: Iswar patra
-Date: 2024-01-04
-Summary:
-- Implemented atomic DFA templates for STARTS_WITH / ENDS_WITH / CONTAINS.
-- Added BaseAgent.call_ollama stub for LLM integration.
-- Added simple API endpoint /generate (FastAPI).
-
----
-
-Commit: Fix: Validator refactor to deterministic engine
-Author: Iswar patra
-Date: 2023-12-03
-Summary:
-- Replaced ad-hoc validation with DeterministicValidator class.
+- Replaced ad-hoc AI-based validation with DeterministicValidator class.
 - Added simulation-based tests for basic atomic logic types.
+- Fixed edge-case numeric mapping (DIVISIBLE_BY) and parse safety.
+- Validator now returns False for unsupported alphabets rather than raising exceptions.
 
 ---
 
-Commit: Feature: Auto-Repair engine (initial)
-Author: Iswar patra
-Date: 2023-12-28
+Commit: feat: add inversion logic and timer, fix DFA generation
+Author: Ishwarpatra
+Date: 2025-12-04
 Summary:
-- Added DFARepairEngine skeleton and simple chain repair heuristics.
-- Added CLI script for local visualizer and debug runs.
+- Implemented `invert_dfa` to compute complement DFAs.
+- Added dead/trap state handling to ensure total transition functions.
+- Added timer for DFA generation performance tracking.
+- Initial creation of `commit.md` for record tracking.
 
 ---
 
-Commit: Test: Add unit tests for core logic
-Author: Iswar patra
-Date: 2023-12-15
+Commit: feat: add support for advanced DFA logic patterns (math/parity/consecutive)
+Author: Ishwarpatra
+Date: 2025-12-10
 Summary:
-- Added test_core_logic.py with tests for STARTS_WITH, ENDS_WITH, CONTAINS, NOT_* behaviours.
-- Achieved basic test coverage for atomic validators.
-
----
-
-Commit: Enhancement: multi-character target chain handling
-Author: Iswar patra
-Date: 2023-12-10
-Summary:
+- Added deterministic DFA builders for EXACT_LENGTH, MIN_LENGTH, MAX_LENGTH, LENGTH_MOD, COUNT_MOD, PRODUCT_EVEN.
 - Improved chain-builder to create states for multi-character targets (e.g., "bb", "aba").
+- Initial support for numeric constraints (DIVISIBLE_BY) with binary/decimal mapping.
 - Hardened transition repair to avoid hallucinated symbols.
 
 ---
 
-Commit: Feature: DFA inversion and dead-state handling
-Author: Iswar patra
-Date: 2023-12-04
+Commit: feat: added test for agent_1
+Author: SpyBroker
+Date: 2025-12-13
 Summary:
-- Implemented invert_dfa to compute complement DFAs.
-- Added dead/trap state handling to ensure total transition functions.
+- Added unit tests for `agent_1` to verify basic prompt handling.
 
 ---
 
-Commit: Improvement: visualizer and Graphviz integration
-Author: Iswar patra
-Date: 2023-12-17
+Commit: Refactor: Modularize project structure into core package
+Author: Ishwarpatra
+Date: 2025-12-16
 Summary:
+- Modularized `python_imply` into `core/` (analyst, architect, validator) and `engines/` (product, repair).
+- Restored `LogicSpec` model and Visualizer tool functionality.
+- Added automatic alphabet detection to `LogicSpec`.
+
+---
+
+Commit: Fix: Enforce deterministic validation and lock alphabet detection
+Author: Ishwarpatra
+Date: 2025-12-17
+Summary:
+- Hardened `DeterministicValidator` against mixed inputs and unsupported alphabets.
+- Migrated core models to Pydantic V2 style (`ConfigDict`, `model_validator`).
+- Removed `update_forward_refs` and replaced with future annotations.
 - Visualizer tool improved: better node/edge labeling, safe filename generation.
 - Added Graphviz detection and graceful fallback.
 
 ---
 
-Commit: Fix: DeterministicValidator edge-case handling
-Author: Iswar patra
-Date: 2023-12-17
+Commit: Add backend/java_imply files and Frontend GUI
+Author: Ishwarpatra / Krishagrawal04
+Date: 2025-12-24
 Summary:
-- Fixed edge cases in get_truth (DIVISIBLE_BY mapping and NO_CONSECUTIVE).
-- Added safety checks for invalid alphabet characters during simulation.
+- Added `java_imply` implementation to backend.
+- Initial implementation of the frontend GUI for Auto-DFA.
+- Added example prompts and UX polish to the dashboard.
+- Improved textarea shortcuts and error handling for backend failures.
 
 ---
 
-Commit: Enhancement: Frontend samples and UX polish
-Author: Iswar patra
-Date: 2023-12-24
+Commit: feat: implement recursive DFA generation via product construction
+Author: Ishwarpatra
+Date: 2025-12-26
 Summary:
-- Added example prompts, improved textarea shortcuts, error handling for backend failures.
+- Added `ProductConstructionEngine` to combine DFAs (AND/OR).
+- ArchitectAgent updated to call product engine for recursive composition.
 
 ---
 
-Commit: Feature: Product construction engine (product automaton)
-Author: Iswar patra
-Date: 2023-12-24
+Commit: fix: resolve state collision bug and improve LLM logic parsing
+Author: Ishwarpatra
+Date: 2025-12-28
 Summary:
-- Added ProductConstructionEngine skeleton to combine DFAs (AND/OR) and invert DFAs.
-- ArchitectAgent updated to call product engine for composition.
-
----
-
-Commit: Fix: Heuristic parser improvements (atomic detection)
-Author: Iswar patra
-Date: 2023-12-28
-Summary:
-- Improved simple regex heuristics to extract targets from quoted/unquoted text.
-- Better alphabet deduction for 'a'/'b' vs '0'/'1'.
-
----
-
-Commit: Feature: CLI and lifecycle hooks
-Author: Iswar patra
-Date: 2024-01-04
-Summary:
-- Added CLI arguments to main (model selection, max_product_states).
-- Lifecycle startup/shutdown logging improved.
-
----
-
-Commit: Feature: Conservative LLM fallback templates
-Author: Iswar patra
-Date: 2023-12-28
-Summary:
+- Changed composite state separator from underscore `_` to pipe `|`. This fixes a critical bug where `q_dead` combined with other states caused collisions.
+- Optimized ArchitectAgent and added basic security guard rails.
 - Strengthened system prompts for AnalystAgent to reduce LLM hallucination (explicit JSON schema).
-- Added DFA-detection guard when LLM returns DFA instead of logic spec.
+- Improved regex heuristics for target extraction from quoted/unquoted text.
 
 ---
 
-Commit: Enhancement: Repair engine robustness (chain builder)
-Author: Iswar patra
-Date: 2023-12-28
+Commit: Fix import path & repair engine; improve alphabet detection
+Author: Ishwarpatra
+Date: 2026-01-02
 Summary:
-- Hardening of auto_repair_dfa: reachability checks, dead-state elimination, alphabet lockdown.
+- Reverted validator verbosity for cleaner logs.
+- Implemented KMP-style CONTAINS logic in the repair engine.
+- Hardening of `auto_repair_dfa`: reachability checks, dead-state elimination, alphabet lockdown.
+- Updated `.gitignore` for editor, environment, and test artifacts.
 
 ---
 
-Commit: Improvement: Deterministic tests expanded & documentation
-Author: Iswar patra
-Date: 2024-01-19
+Commit: feat: implement backend-frontend bridge and responsive UI
+Author: Ishwarpatra / author (Iswar Patra)
+Date: 2026-01-04
 Summary:
-- Expanded unit tests to cover multi-character patterns and some composite flows.
-- README updated with usage examples.
+- Integrated FastAPI bridge between Python backend and React frontend.
+- Added Zoom and Pan functionality to the DFA diagram (React-Flow/SVG).
+- Added DFA optimizer and REST API endpoints.
+- Added CLI arguments to main (`model selection`, `max_product_states`).
+- Initial README with project overview and setup.
 
 ---
 
-Commit: Refactor: split python_imply into modular agents
-Author: Iswar patra
-Date: 2023-12-17
+Commit: feat: alphabet unification, N-ary combine, product-size safety checks
+Author: Ishwarpatra
+Date: 2026-01-14
 Summary:
-- Modularized agents into core/ (analyst, architect, validator) and engines (product, repair).
-- Improved Pydantic models for DFA and LogicSpec.
+- Implemented alphabet unification across composite `LogicSpec` children.
+- Added N-ary AND/OR combination (flattening nested trees).
+- Added product-size safety estimator and thresholds.
+- Default `max_product_states` set to 2000 (configurable via `AUTO_DFA_MAX_PRODUCT_STATES`).
+- Added local composite splitter for fast-path "and/or" parsing.
+- Revised commit record for better clarity and structure.
 
 ---
 
-Commit: Feature: Initial support for numeric constraints (DIVISIBLE_BY)
-Author: Iswar patra
-Date: 2023-12-10
+Commit: refactor(main): Remove Graphviz, add JSON export for frontend
+Author: Ishwarpatra
+Date: 2026-01-18
 Summary:
-- Added DIVISIBLE_BY logic parsing and validator handling with conservative mapping (binary, decimal).
-- Added tests for divisibility in binary strings.
+- Removed system Graphviz dependency in favor of JSON-based diagram specs.
+- Frontend now renders DFA using internal JSON representation.
+- Achieved better decoupling between backend simulation and frontend visualization.
 
 ---
 
-Commit: Fix: Edge-case DIVISIBLE_BY mapping and parse safety
-Author: Iswar patra
-Date: 2023-12-17
+Commit: refactor(repair): Replace hardcoded templates with LLM-based regeneration
+Author: Ishwarpatra
+Date: 2026-01-20
 Summary:
-- Avoided incorrect numeric mapping for non-digit alphabets.
-- Validator now returns False for unsupported alphabets rather than raise.
+- Shifted repair strategy from fixed templates to LLM-guided state/transition reconstruction.
+- Improved parity count regex in `LogicSpec.from_prompt`.
+- Added alphabet propagation for deeply nested composite DFA specs.
 
 ---
 
-Commit: Feature: Local composite parsing (fast path for AND/OR chains)
-Author: Iswar patra
-Date: 2024-01-19
+Commit: fix(validator): correct logical error in parity counting
+Author: Ishwarpatra
+Date: 2026-01-23
 Summary:
-- Added a fast local splitter to detect top-level "A and B and C" and "A or B or C" where possible.
-- Falls back to LLM when local parsing is insufficient.
-
----
-
-Commit: Feature: Alphabet unification and N-ary combine + safety checks
-Author: Iswar patra
-Date: 2024-01-19
-Summary:
-- Added alphabet-unification heuristics across composite LogicSpec children.
-- Implemented flattening of nested AND/OR to N-ary children.
-- Added product-size estimator and max_product_states safety threshold to prevent blow-ups.
-
----
-
-Commit: Feature: Deterministic builders for length/count/product parity
-Author: Iswar patra
-Date: 2023-12-10
-Summary:
-- Added deterministic DFA builders for EXACT_LENGTH, MIN_LENGTH, MAX_LENGTH, LENGTH_MOD, COUNT_MOD, PRODUCT_EVEN.
-- Updated ArchitectAgent to prefer in-code builders before LLM DFA generation.
-
----
-
-Commit: Chore: Pydantic V2 migration (models) and warning cleanup
-Author: Iswar patra
-Date: 2023-12-17
-Summary:
-- Migrated core models to Pydantic V2 style (ConfigDict/model_validator).
-- Removed update_forward_refs and replaced with future annotations on models.
-- Reduced deprecation warnings in test runs.
-
----
-
-Commit: Feature: Full composition integration, tests, and docs updates
-Author: Iswar patra
-Date: 2024-01-19
-Summary:
-- Completed integration of alphabet unification, N-ary AND/OR composition, product-size pre-checks, and conservative NL parsing.
-- Added comprehensive tests (test_core_logic_extra.py) covering string patterns, numeric constraints, length/count checks, and product parity.
-- Updated README and commit.md to document new NL forms, mapping rules, and CLI options.
-- Default max_product_states set to 2000 (configurable via AUTO_DFA_MAX_PRODUCT_STATES).
-- Committed by: Iswar patra
+- Fixed a bug in the deterministic validator where parity bits were miscounted for long strings.
+- Refactor(api): Improve state management and error handling for better stability.
+- Finalizing validation suite for parity-related edge cases.
 
 ---
 
 Notes
 - This file is a curated activity log; additional small commits and refactors exist in the repository history that are not listed here for brevity.
-- If you'd like, I can expand each entry with explicit file lists and diff summaries (per-commit file changes), or convert this into a full chronological git-style changelog with commit SHAs.
+- If you'd like, I can expand each entry with explicit file lists and diff summaries, or convert this into a full chronological git-style changelog with commit SHAs.
+- Repository: Ishwarpatra/toc_aiagent
