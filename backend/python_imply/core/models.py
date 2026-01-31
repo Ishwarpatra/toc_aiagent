@@ -136,17 +136,18 @@ class LogicSpec(BaseModel):
             return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
 
         # Negations / basic patterns
-        if "not start" in user_lower or "does not start" in user_lower:
+        # Negations / basic patterns with improved typo-robustness
+        if re.search(r"not\s+st[art]{2,}s?|does\s+not\s+st[art]{2,}s?", user_lower):
             deduced_type = "NOT_STARTS_WITH"
-        elif "start" in user_lower or "begin" in user_lower:
+        elif re.search(r"st[art]{2,}s?|beg[in]{2,}s?", user_lower):
             deduced_type = "STARTS_WITH"
-        elif "not end" in user_lower or "does not end" in user_lower:
+        elif re.search(r"not\s+en[ds]{1,}|does\s+not\s+en[ds]{1,}", user_lower):
             deduced_type = "NOT_ENDS_WITH"
-        elif "end" in user_lower:
+        elif re.search(r"en[ds]{1,2}\b", user_lower):
             deduced_type = "ENDS_WITH"
-        elif "not contain" in user_lower or "does not contain" in user_lower:
+        elif re.search(r"not\s+cont[ain]{2,}|does\s+not\s+cont[ain]{2,}", user_lower):
             deduced_type = "NOT_CONTAINS"
-        elif "contain" in user_lower or "contains" in user_lower:
+        elif re.search(r"cont[ain]{2,}s?|incl[ude]{2,}s?", user_lower):
             deduced_type = "CONTAINS"
 
         # If we have an atomic type that expects a target, extract it
@@ -196,6 +197,83 @@ class DFA(BaseModel):
         if self.start_state not in self.states:
             raise ValueError("Empty or invalid start_state")
         return self
+
+    def accepts(self, input_string: str) -> bool:
+        """
+        Simulate the DFA on the given input string.
+        
+        Returns True if the string is accepted (ends in an accept state),
+        False if rejected or if any character causes a crash (missing transition).
+        
+        This is the core method for Black Box testing - it only uses the DFA's
+        structure, not any external specification.
+        """
+        current_state = self.start_state
+        
+        for char in input_string:
+            # Check if character is in alphabet
+            if char not in self.alphabet:
+                return False  # Invalid character, reject
+            
+            # Check for valid transition
+            if current_state not in self.transitions:
+                return False  # No transitions from current state, crash
+            
+            if char not in self.transitions[current_state]:
+                return False  # No transition for this character, crash
+            
+            current_state = self.transitions[current_state][char]
+        
+        return current_state in self.accept_states
+    
+    def simulate_with_trace(self, input_string: str) -> dict:
+        """
+        Simulate the DFA with a full trace for debugging purposes.
+        
+        Returns a dictionary with:
+        - accepted: bool
+        - trace: list of (state, char, next_state) tuples
+        - final_state: the ending state (or None if crashed)
+        - crash_reason: reason for crash if any
+        """
+        trace = []
+        current_state = self.start_state
+        
+        for i, char in enumerate(input_string):
+            if char not in self.alphabet:
+                return {
+                    "accepted": False,
+                    "trace": trace,
+                    "final_state": None,
+                    "crash_reason": f"Invalid character '{char}' at position {i}"
+                }
+            
+            if current_state not in self.transitions:
+                return {
+                    "accepted": False,
+                    "trace": trace,
+                    "final_state": None,
+                    "crash_reason": f"No transitions from state '{current_state}'"
+                }
+            
+            if char not in self.transitions[current_state]:
+                return {
+                    "accepted": False,
+                    "trace": trace,
+                    "final_state": None,
+                    "crash_reason": f"No transition for '{char}' from state '{current_state}'"
+                }
+            
+            next_state = self.transitions[current_state][char]
+            trace.append((current_state, char, next_state))
+            current_state = next_state
+        
+        return {
+            "accepted": current_state in self.accept_states,
+            "trace": trace,
+            "final_state": current_state,
+            "crash_reason": None
+        }
 
     def model_dump(self) -> Dict[str, Any]:
         return {
