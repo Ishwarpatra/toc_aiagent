@@ -2,7 +2,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 *.pyc
-dfa_result.png
 
 # Editor / OS
 .vscode/
@@ -20,6 +19,7 @@ __pypackages__/
 pytestdebug.log
 coverage.xml
 .coverage
+htmlcov/
 
 # Build / output
 backend/output/
@@ -28,5 +28,18 @@ node_modules/
 dist/
 build/
 
-# Local debug scripts (not required in repo)
-backend/scripts/debug_repair.py
+# Generated output & logs
+backend/scripts/output/
+backend/scripts/qa_output/
+scripts/sample_output.dot
+
+# Large data files (regenerable)
+backend/scripts/data/test_enhanced_fixed_6000.csv
+backend/scripts/data/run_log.txt
+
+# Cache directories
+backend/.cache/
+.cache/
+
+# Debug scripts (dev only)
+backend/scripts/debug/

@@ -26,18 +26,74 @@ Auto-DFA is an intelligent system that translates natural language descriptions 
                                                └───────────────────┘
 ```
 
+## 📁 Project Structure
+
+```
+toc_aiagent/
+├── README.md                       # This file
+├── docker-compose.yml              # Full-stack Docker orchestration
+├── .github/workflows/qa.yml        # CI pipeline
+│
+├── docs/                           # 📖 All documentation
+│   ├── architecture.md             # System design & agent pipeline
+│   ├── DEPLOYMENT.md               # Production deployment guide
+│   ├── TESTING.md                  # Testing strategy & coverage
+│   ├── CONTRIBUTING.md             # Contribution guidelines
+│   ├── CHANGELOG.md                # Version history & roadmap
+│   └── commit_history.md           # Detailed commit log
+│
+├── backend/
+│   ├── python_imply/               # 🐍 Python backend (FastAPI)
+│   │   ├── api.py                  # REST API server
+│   │   ├── main.py                 # DFA generator orchestrator
+│   │   ├── core/                   # Core engine modules
+│   │   │   ├── models.py           # Pydantic: LogicSpec, DFA
+│   │   │   ├── agents.py           # AnalystAgent, ArchitectAgent
+│   │   │   ├── validator.py        # Deterministic DFA validator
+│   │   │   ├── repair.py           # LLM-based DFA repair engine
+│   │   │   ├── optimizer.py        # State minimization (BFS/DFS)
+│   │   │   ├── product.py          # Product construction (AND/OR/NOT)
+│   │   │   ├── oracle.py           # Test oracle for QA
+│   │   │   └── normalizer.py       # Prompt normalization
+│   │   ├── test/                   # Unit & integration tests
+│   │   ├── requirements.txt        # Production dependencies
+│   │   └── requirements-dev.txt    # Dev/test dependencies
+│   ├── scripts/                    # QA & batch verification scripts
+│   │   ├── batch_verify.py         # Batch DFA verification
+│   │   ├── generate_tests.py       # Test case generator
+│   │   ├── run_qa_pipeline.py      # Full QA pipeline
+│   │   ├── data/                   # CSV test data files
+│   │   ├── debug/                  # Debug-only scripts
+│   │   └── output/                 # Generated reports & logs
+│   └── config/                     # Pattern configs (YAML/JSON)
+│
+├── frontend/                       # ⚛️ React + Vite frontend
+│   ├── src/
+│   │   ├── App.jsx                 # Main application
+│   │   ├── components/
+│   │   │   ├── Canvas.jsx          # DFA visualization (SVG)
+│   │   │   └── ErrorBoundary.jsx   # Error handling wrapper
+│   │   └── *.css                   # Styles
+│   └── package.json
+│
+└── scripts/                        # 🔧 Dev utility scripts
+    ├── install-hooks.ps1           # Git hook installer
+    ├── debug_parsing.py            # Parser debugging tool
+    └── test_correctness.py         # End-to-end correctness check
+```
+
 ### Core Modules
 
-| Module | Description |
-|--------|-------------|
-| `api.py` | FastAPI REST server exposing `/generate` and `/health` endpoints |
-| `main.py` | DFAGeneratorSystem orchestrating the pipeline |
-| `core/agents.py` | AnalystAgent (NL → LogicSpec) and ArchitectAgent (LogicSpec → DFA) |
-| `core/models.py` | Pydantic models for `LogicSpec` and `DFA` |
-| `core/repair.py` | Auto-repair engine ensuring DFA completeness |
-| `core/optimizer.py` | **NEW** - Removes unreachable/non-productive states |
-| `core/validator.py` | Deterministic validation against test cases |
-| `core/product.py` | Product construction for AND/OR/NOT operations |
+| Module | Location | Description |
+|--------|----------|-------------|
+| `api.py` | `backend/python_imply/` | FastAPI server — `/generate`, `/health`, `/export/*` endpoints |
+| `main.py` | `backend/python_imply/` | `DFAGeneratorSystem` orchestrating the pipeline |
+| `agents.py` | `backend/python_imply/core/` | AnalystAgent (NL → LogicSpec) + ArchitectAgent (LogicSpec → DFA) |
+| `models.py` | `backend/python_imply/core/` | Pydantic models for `LogicSpec` and `DFA` |
+| `repair.py` | `backend/python_imply/core/` | LLM-based auto-repair for failed validations |
+| `optimizer.py` | `backend/python_imply/core/` | Removes unreachable/non-productive states |
+| `validator.py` | `backend/python_imply/core/` | Deterministic validation against test cases |
+| `product.py` | `backend/python_imply/core/` | Product construction for AND/OR/NOT operations |
 
 ## 🛠️ Tech Stack
 

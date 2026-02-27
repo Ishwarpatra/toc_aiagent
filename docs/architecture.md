@@ -110,7 +110,119 @@ If you rely on Ollama or another LLM, wire the BaseAgent.call_ollama method to y
   - ask for clarification.
 - Non-regular properties (primality, perfect square, general factorization) are not supported because DFAs cannot decide those languages for arbitrary-length inputs.
 
+## Agent Interaction Sequence
+
+The following diagram shows how a request flows through the multi-agent pipeline:
+
+```mermaid
+sequenceDiagram
+    participant U as User / Frontend
+    participant API as FastAPI (/generate)
+    participant A as AnalystAgent
+    participant Ar as ArchitectAgent
+    participant V as DeterministicValidator
+    participant R as RepairEngine
+    participant LLM as Ollama LLM
+
+    U->>API: POST /generate {prompt}
+    API->>A: analyze(prompt)
+    A->>A: Try deterministic NL parser
+    alt Complex/ambiguous prompt
+        A->>LLM: call_ollama(prompt)
+        LLM-->>A: JSON LogicSpec
+    end
+    A-->>API: LogicSpec
+
+    API->>Ar: design(spec)
+    alt Atomic spec (STARTS_WITH, etc.)
+        Ar->>Ar: Build DFA deterministically
+    else Composite spec (AND/OR/NOT)
+        Ar->>Ar: Product construction
+    end
+    alt LLM needed for complex design
+        Ar->>LLM: call_ollama(spec)
+        LLM-->>Ar: DFA JSON
+    end
+    Ar-->>API: DFA object
+
+    API->>V: validate(dfa, spec)
+    V-->>API: (is_valid, error_msg)
+
+    alt Validation failed
+        API->>R: auto_repair_dfa(dfa, spec, error)
+        R->>LLM: Request repair
+        LLM-->>R: Repaired DFA
+        R->>V: Re-validate
+        V-->>R: (is_valid, error_msg)
+        R-->>API: Repaired DFA
+    end
+
+    API-->>U: {valid, dfa, spec, performance}
+```
+
+## Error Handling for Invalid / Ambiguous Prompts
+
+The system handles errors at multiple levels:
+
+| Error Type | HTTP Status | Example | System Response |
+|-----------|------------|---------|-----------------|
+| Empty/whitespace prompt | 422 | `""`, `"   "` | Pydantic validation rejects before processing |
+| Too-long prompt | 422 | 501+ characters | Input sanitizer rejects |
+| Unrecognized pattern | 400 | `"do something weird"` | AnalystAgent raises `ValueError` |
+| Ambiguous composition | Fallback to LLM | `"maybe starts or ends"` | Parser defers to Ollama for interpretation |
+| Unsupported property | 400 | `"is a prime number"` | Error: non-regular property not supported |
+| Product state explosion | 400 | 3+ complex AND clauses | Exceeds `MAX_PRODUCT_STATES` threshold |
+| Ollama offline | 503 | Service unavailable | Retry 3× with backoff, then structured error |
+| DFA validation fails | 200 (valid=false) | Logic error in design | Returns DFA with `valid: false` and error message |
+
+When the deterministic parser cannot interpret a prompt, it falls back to the LLM-based analyzer. If the LLM is also unavailable, the system returns a clear 503 error with a hint to start Ollama.
+
+## Advanced Usage Examples
+
+Beyond basic patterns, the system supports complex compositions:
+
+```text
+# Composite AND (product construction)
+"starts with 'a' and ends with 'b'"
+"contains '01' and even number of 1s"
+"starts with '101' and divisible by 3 and contains '11'"
+
+# Composite OR
+"contains '11' or ends with '01'"
+"starts with 'a' or starts with 'b'"
+
+# Composite NOT
+"does not contain '00'"
+"not starts with 'b'"
+
+# Multi-constraint (advanced)
+"strings with even number of a's and odd number of b's"
+"length mod 3 = 1 and starts with '0'"
+"count of 1s mod 3 = 2 and ends with '01'"
+
+# Numerical on custom alphabets
+"divisible by 5"                    # binary interpretation over {0,1}
+"even number"                       # shorthand for divisible by 2
+"product is even"                   # digit product parity
+```
+
+## Model Configuration
+
+The LLM model used for complex prompt analysis and DFA repair is configurable:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTO_DFA_MODEL` | `qwen2.5-coder:1.5b` | Ollama model name |
+
+To use a different model (e.g., Llama 3):
+```bash
+export AUTO_DFA_MODEL=llama3:8b
+ollama pull llama3:8b
+python api.py
+```
+
+> **Note:** Different models may produce different accuracy levels. Always run the QA pipeline (`python scripts/batch_verify.py`) after switching models to validate quality.
+
 ## Contributing
 
-Please add tests for new natural-language variants you expect, and open PRs for refinements or additional parsing patterns.
-```
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for code style, PR process, and testing requirements.

@@ -1,0 +1,10 @@
+{
+  "extraPaths": [
+    "backend/python_imply"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "backend/python_imply"
+    }
+  ]
+}

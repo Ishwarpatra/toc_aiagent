@@ -1,9 +1,0 @@
-// DFA Visualization
-digraph {
-	rankdir=LR
-	start_ptr [label="" shape=none]
-	start_ptr -> q0
-	q0 [label=q0 shape=circle]
-	q0 -> q0 [label=0]
-	q0 -> q0 [label=1]
-}
