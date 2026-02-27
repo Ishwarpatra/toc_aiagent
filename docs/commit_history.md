@@ -4,6 +4,50 @@ Each entry contains: Commit: <Title>, Author: <Name>, Date (YYYY-MM-DD), and a s
 
 ---
 
+Commit: refactor: implement concurrency-safe cache with context manager protocol
+Author: CodeMaster (Senior Project Manager Directives)
+Date: 2026-02-27
+Summary:
+- CRITICAL FIXES (Code Master Directives - Round 2):
+  * Context Manager protocol: Added __enter__/__exit__ to DFAGeneratorSystem
+  * Worker function updated to use 'with DFAGeneratorSystem() as system:' pattern
+  * Guarantees deterministic cache.close() regardless of success/failure
+  * Encapsulates resource management within class, not consumer
+
+- CACHE ARCHITECTURE FIXES:
+  * JSON serialization: DFA data serialized to JSON strings before diskcache storage
+  * Fixes serialization failures with complex nested tuple/dict structures
+  * Cache write failures now raise RuntimeError (no longer silently swallowed)
+  * SQLite WAL mode enabled with 60s timeout for concurrent parallel access
+  * Absolute cache directory paths to avoid multiprocessing spawn issues
+
+- TELEMETRY FIXES:
+  * Cache hit/miss counters added to ArchitectAgent (self.cache_hits/misses)
+  * _worker_run_test returns cache stats in result payload
+  * _emit_summary aggregates cache_hits from all worker results
+  * Fixed false positive "High prompt duplication" warning
+  * Warning now only fires on actual duplicate prompts (duplicate_count > 0)
+
+- NEW FEATURES:
+  * --clear-cache flag in run_qa_pipeline.py for clean cache reset via API
+  * Uses cache.clear() instead of manual file deletion
+
+- DEAD CODE REMOVAL:
+  * Deleted backend/python_imply/core/cache.py (redundant SQLite DFACache)
+  * Now using diskcache.Cache exclusively throughout codebase
+
+- CONFIGURATION:
+  * diskcache configured with: timeout=60, sqlite_journal_mode="wal", sqlite_synchronous=1
+  * Cache directory: backend/.cache/cache.db
+
+Test Results: All tests pass with 100% cache hit ratio on repeated runs
+- cache_hits: 4, cache_misses: 0, cache_hit_ratio: 100.0
+- cache_total_entries: 4, cache_volume_bytes: 32768
+- No false positive warnings
+- Cache persists correctly across process restarts
+
+---
+
 Commit: feat: Complete code review fixes for production-ready DFA pipeline
 Author: CodeMaster (Senior Project Manager Directives)
 Date: 2026-02-27
