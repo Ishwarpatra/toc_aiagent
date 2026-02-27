@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend/python_imply
+      dockerfile: Dockerfile
+    container_name: autodfa-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # LLM Model configuration
+      - AUTO_DFA_MODEL=qwen2.5-coder:1.5b
+      # Point to host's Ollama (host.docker.internal resolves to host machine)
+      - OLLAMA_URL=http://host.docker.internal:11434/api/generate
+      # CORS configuration
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:80,http://frontend
+      - ENVIRONMENT=production
+    extra_hosts:
+      # Allow container to access host's localhost (for Ollama)
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Frontend Web Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # API URL for build-time injection
+        # When using nginx proxy, use relative path
+        VITE_API_URL: ""
+    container_name: autodfa-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+# Optional: Network configuration
+networks:
+  default:
+    name: autodfa-network
