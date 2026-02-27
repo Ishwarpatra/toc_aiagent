@@ -3,8 +3,21 @@ fastapi>=0.100.0
 uvicorn>=0.23.0
 pydantic>=2.0.0
 
-# AI/LLM
-ollama>=0.1.0
+# Security & Middleware
+slowapi>=0.1.9
 
-# Visualization
-graphviz>=0.20.0
+# Caching
+diskcache>=5.0
+
+# YAML parsing (used by normalizer)
+pyyaml>=6.0
+
+# HTTP Client (for LLM repair engine)
+requests>=2.28.0
+
+# AI/LLM (optional - for ollama Python client)
+# ollama>=0.1.0
+
+# Note: graphviz has been removed as visualization is now handled
+# entirely by the frontend using Mermaid.js
+
