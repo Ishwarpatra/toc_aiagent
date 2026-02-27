@@ -80,12 +80,27 @@ class DFAGeneratorSystem:
         """
         start_time = time.time()
 
-        # 1. Analyze (Supports Recursive Logic)
-        try:
-            spec = self.analyst.analyze(user_query)
-        except Exception as e:
-            logger.error(f"Analysis Failed: {e}")
-            return None, False, str(e)
+        # 1. Analyze (with retry / fallback)
+        spec = None
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                spec = self.analyst.analyze(user_query)
+                break
+            except LLMConnectionError as e:
+                last_error = e
+                if attempt < self.max_retries:
+                    delay = 2 ** (attempt - 1)  # 1s, 2s, 4s
+                    logger.warning(f"Analysis attempt {attempt}/{self.max_retries} failed (LLM unavailable), retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Analysis failed after {self.max_retries} attempts: {e}")
+            except Exception as e:
+                logger.error(f"Analysis Failed: {e}")
+                return None, False, str(e)
+
+        if spec is None:
+            return None, False, f"LLM service unavailable after {self.max_retries} retries: {last_error}"
 
         # Log spec tree info
         try:
@@ -93,15 +108,27 @@ class DFAGeneratorSystem:
         except Exception:
             pass
 
-        # 2. Architect (Recursive Design)
-        try:
-            dfa_obj = self.architect.design(spec)
-        except LLMConnectionError as e:
-            logger.error(f"Architecture Failed (LLM unavailable): {e}")
-            return None, False, str(e)
-        except Exception as e:
-            logger.error(f"Architecture Failed: {e}")
-            return None, False, str(e)
+        # 2. Architect (with retry / fallback)
+        dfa_obj = None
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                dfa_obj = self.architect.design(spec)
+                break
+            except LLMConnectionError as e:
+                last_error = e
+                if attempt < self.max_retries:
+                    delay = 2 ** (attempt - 1)
+                    logger.warning(f"Architecture attempt {attempt}/{self.max_retries} failed (LLM unavailable), retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Architecture failed after {self.max_retries} attempts: {e}")
+            except Exception as e:
+                logger.error(f"Architecture Failed: {e}")
+                return None, False, str(e)
+
+        if dfa_obj is None:
+            return None, False, f"LLM service unavailable after {self.max_retries} retries: {last_error}"
 
         # 3. Validate
         is_valid, error_msg = self.validator.validate(dfa_obj, spec)
