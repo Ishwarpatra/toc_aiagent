@@ -285,6 +285,39 @@ Summary:
 
 ---
 
+Commit: refactor(oracle): extract all Oracle logic to core/oracle.py
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Removed ~380 lines of duplicated `check_condition`, `get_oracle_strings`, `detect_contradiction`, and `CompositeOracleSolver` from `generate_tests.py`.
+- `generate_tests.py` now imports all Oracle functions from `core/oracle.py` — single source of truth.
+- Removed hardcoded `SAFE_AND/OR_COMBINATIONS` that overrode config values.
+- All alphabet constants derived from `config/patterns.yaml`, eliminating magic strings.
+
+---
+
+Commit: refactor(batch_verify): parallel processing, structlog telemetry, cache metrics
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Complete rewrite of `batch_verify.py` addressing 3 architectural directives.
+- **Parallel Processing**: `ProcessPoolExecutor` with stateless `_process_chunk` workers. Each worker creates its own `DFAGeneratorSystem` to avoid pickle serialization issues.
+- **Structured Telemetry**: All `print()` stripped; replaced with `structlog` JSON-formatted logs. Every event emits structured key-value pairs: `{"event": "test_complete", "prompt": "...", "status": "PASS", "time_ms": 42.1}`.
+- **Cache Metrics**: Tracks prompt dedup via SHA-256 hashing. Final summary emits `cache_hits`, `cache_misses`, and `cache_hit_ratio`. Regression alert at >10% duplication.
+
+---
+
+Commit: feat(api): add /oracle/verify endpoint and structlog dependency
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Added `/oracle/verify` POST endpoint wrapping `core/oracle.py` for production runtime monitoring.
+- Accepts `op_type`, `pattern`, `alphabet`, `test_strings`; returns classified results and authoritative oracle examples.
+- Added `structlog>=24.0` to `requirements.txt`.
+- Bumped API version to 1.1.0.
+
+---
+
 Notes
 - This file is a curated activity log; additional small commits and refactors exist in the repository history that are not listed here for brevity.
 - If you'd like, I can expand each entry with explicit file lists and diff summaries, or convert this into a full chronological git-style changelog with commit SHAs.
