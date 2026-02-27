@@ -444,14 +444,73 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "Auto-DFA API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "description": "AI-Powered DFA Generator",
         "endpoints": {
             "/health": "Health check (GET)",
             "/generate": "Generate DFA from prompt (POST)",
             "/export/json": "Export DFA as JSON file (POST)",
-            "/export/dot": "Export DFA as Graphviz DOT file (POST)"
+            "/export/dot": "Export DFA as Graphviz DOT file (POST)",
+            "/oracle/verify": "Oracle truth verification (POST)"
         }
+    }
+
+
+# ---------------------------------------------------------------------------
+# Oracle endpoint — wraps core/oracle.py for production runtime monitoring
+# ---------------------------------------------------------------------------
+
+class OracleRequest(BaseModel):
+    """Request model for oracle verification."""
+    op_type: str
+    pattern: str
+    alphabet: list[str] = ["0", "1"]
+    test_strings: list[str] = []
+
+    @field_validator("op_type")
+    @classmethod
+    def validate_op_type(cls, v: str) -> str:
+        allowed = {
+            "STARTS_WITH", "NOT_STARTS_WITH", "ENDS_WITH", "NOT_ENDS_WITH",
+            "CONTAINS", "NOT_CONTAINS", "EXACT_LENGTH", "DIVISIBLE_BY",
+            "EVEN_COUNT", "ODD_COUNT", "NO_CONSECUTIVE",
+        }
+        if v.upper() not in allowed:
+            raise ValueError(f"Invalid op_type: {v}. Allowed: {sorted(allowed)}")
+        return v.upper()
+
+
+@app.post("/oracle/verify")
+@limiter.limit("30/minute")
+async def oracle_verify(request: Request, body: OracleRequest):
+    """
+    Oracle truth verification endpoint.
+
+    Verifies test strings against a given condition using the canonical Oracle,
+    and optionally generates authoritative accept/reject examples.
+
+    Use this for production runtime monitoring and DFA correctness assertions.
+    """
+    from core.oracle import check_condition, get_oracle_strings
+
+    # Classify provided test strings
+    results = []
+    for s in body.test_strings:
+        satisfies = check_condition(s, body.op_type, body.pattern, body.alphabet)
+        results.append({"string": s, "satisfies": satisfies})
+
+    # Generate authoritative oracle strings
+    accept_examples, reject_examples = get_oracle_strings(
+        body.op_type, body.pattern, body.alphabet
+    )
+
+    return {
+        "op_type": body.op_type,
+        "pattern": body.pattern,
+        "alphabet": body.alphabet,
+        "test_results": results,
+        "oracle_accept_examples": accept_examples,
+        "oracle_reject_examples": reject_examples,
     }
 
 

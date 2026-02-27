@@ -12,6 +12,9 @@ diskcache>=5.0
 # YAML parsing (used by normalizer)
 pyyaml>=6.0
 
+# Structured logging (JSON telemetry for Datadog/ELK)
+structlog>=24.0
+
 # HTTP Client (for LLM repair engine)
 requests>=2.28.0
 
