@@ -616,11 +616,24 @@ class ArchitectAgent(BaseAgent):
     def __init__(self, model_name: str, max_product_states: int = 2000):
         super().__init__(model_name)
         self.max_product_states = max_product_states
-        # Initialize persistent cache
+        # Initialize persistent cache with concurrency-safe settings
         import os
-        cache_dir = os.path.join(os.path.dirname(__file__), '..', '..', '.cache')
+        # CRITICAL: Use absolute path to avoid issues with multiprocessing spawn
+        cache_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.cache'))
         os.makedirs(cache_dir, exist_ok=True)
-        self.cache = dc.Cache(directory=cache_dir)
+        # CRITICAL: diskcache with WAL mode for concurrent read/write access
+        # timeout=60: Wait up to 60 seconds for lock acquisition
+        # sqlite_journal_mode="wal": Enable Write-Ahead Logging
+        # sqlite_synchronous=1 (NORMAL): Good balance of safety and performance
+        self.cache = dc.Cache(
+            directory=cache_dir,
+            timeout=60,
+            sqlite_journal_mode="wal",
+            sqlite_synchronous=1,
+        )
+        # CRITICAL: Track cache hit/miss statistics for telemetry
+        self.cache_hits = 0
+        self.cache_misses = 0
 
         # product_engine and repair_engine are expected to be available in your repo
         # If you have ProductConstructionEngine import it; here we assume product_engine has combine/invert
@@ -656,22 +669,58 @@ class ArchitectAgent(BaseAgent):
     def _get_cached_atomic_dfa(self, logic_type: str, target: str, alphabet_tuple: tuple) -> Optional[tuple]:
         """
         Retrieve cached atomic DFA from persistent cache.
+        Tracks hit/miss statistics for telemetry.
+        Uses JSON serialization for reliable disk storage.
         """
+        import json
         cache_key = self._get_atomic_spec_hash(logic_type, target, alphabet_tuple)
         try:
-            return self.cache.get(cache_key)
-        except:
+            raw_data = self.cache.get(cache_key)
+            if raw_data is None:
+                self.cache_misses += 1
+                import structlog
+                log = structlog.get_logger()
+                log.info("cache_get_result", logic_type=logic_type, target=target[:30], cache_key=cache_key[:16], result_type=None, result_is_none=True, cache_hits=self.cache_hits, cache_misses=self.cache_misses)
+                return None
+            
+            # Deserialize JSON string back to tuple
+            dfa_dict = json.loads(raw_data)
+            result = tuple(dfa_dict.items())
+            
+            # CRITICAL: Track cache hit/miss for telemetry rollup
+            self.cache_hits += 1
+            
+            import structlog
+            log = structlog.get_logger()
+            log.info("cache_get_result", logic_type=logic_type, target=target[:30], cache_key=cache_key[:16], result_type="tuple", result_is_none=False, cache_hits=self.cache_hits, cache_misses=self.cache_misses)
+            return result
+        except Exception as e:
+            import structlog
+            log = structlog.get_logger()
+            log.warning("cache_get_failed", logic_type=logic_type, target=target[:30], error=str(e))
+            self.cache_misses += 1
             return None
 
     def _set_cached_atomic_dfa(self, logic_type: str, target: str, alphabet_tuple: tuple, dfa_tuple: tuple) -> None:
         """
         Store atomic DFA in persistent cache.
+        Uses JSON serialization for reliable disk storage.
+        CRITICAL: Raises RuntimeError on cache write failure to expose serialization issues.
         """
+        import json
         cache_key = self._get_atomic_spec_hash(logic_type, target, alphabet_tuple)
         try:
-            self.cache.set(cache_key, dfa_tuple, expire=3600*24*30)  # Expire in 30 days
-        except:
-            pass  # Silently fail if caching fails
+            # CRITICAL: Serialize to JSON string for reliable disk storage
+            dfa_dict = dict(dfa_tuple)
+            json_data = json.dumps(dfa_dict)
+            result = self.cache.set(cache_key, json_data, expire=3600*24*30)
+            
+            import structlog
+            log = structlog.get_logger()
+            log.info("cache_write_success", logic_type=logic_type, target=target[:30], cache_key=cache_key[:16], result=result)
+        except Exception as e:
+            # CRITICAL: Raise RuntimeError to expose cache serialization failures
+            raise RuntimeError(f"CACHE WRITE FAILED for {logic_type}({target[:30]}): {e}")
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """
@@ -799,23 +848,45 @@ class ArchitectAgent(BaseAgent):
     def design(self, spec: LogicSpec) -> DFA:
         """
         Design a DFA from a LogicSpec. Handles composite (AND/OR/NOT) and atomic specs.
-        Uses LRU caching to avoid recomputing the same atomic DFA multiple times.
+        Uses persistent diskcache to avoid recomputing the same atomic DFA multiple times.
 
         CRITICAL: For composite operations, the unified alphabet is propagated DOWN
         to all children BEFORE building them. This prevents alphabet mismatch errors.
         """
-        # For atomic operations, try to use the cache
+        import structlog
+        log = structlog.get_logger()
+        
+        # For atomic operations, try to use the persistent cache
         if not spec.children and spec.logic_type not in ["AND", "OR", "NOT"]:  # Atomic operation
+            # Convert to hashable types for caching
+            alphabet_tuple = tuple(sorted(spec.alphabet)) if spec.alphabet else ('0', '1')
+            
+            log.info("design_atomic", logic_type=spec.logic_type, target=(spec.target or "")[:30], alphabet=spec.alphabet, has_children=bool(spec.children))
+            
+            # Try cache first
+            cached_result = self._get_cached_atomic_dfa(spec.logic_type, spec.target or "", alphabet_tuple)
+            if cached_result is not None:
+                # Cache hit
+                log.info("cache_hit", logic_type=spec.logic_type, target=(spec.target or "")[:30])
+                result_dict = dict(cached_result)
+                return DFA(**result_dict)
+            
+            # Cache miss - build and store
+            log.info("cache_miss", logic_type=spec.logic_type, target=(spec.target or "")[:30])
             try:
-                # Convert to hashable types for caching
-                result_tuple = self._build_atomic_dfa(spec.logic_type, spec.target or "", list(spec.alphabet))
-                # Convert back to dict for DFA construction
+                result_tuple = self._build_atomic_dfa(spec.logic_type, spec.target or "", list(alphabet_tuple))
                 if result_tuple is not None:
+                    # Store in cache
+                    self._set_cached_atomic_dfa(spec.logic_type, spec.target or "", alphabet_tuple, result_tuple)
                     result_dict = dict(result_tuple)
                     return DFA(**result_dict)
+                else:
+                    log.warning("build_atomic returned None", logic_type=spec.logic_type)
             except Exception as e:
-                logger.info(f"[Architect] Cache miss or error for {spec.logic_type}, computing normally: {e}")
-                # If cache fails, continue with normal computation
+                logger.info(f"[Architect] Atomic build failed for {spec.logic_type}, computing normally: {e}")
+                # If build fails, continue with normal computation
+        else:
+            log.info("design_composite_or_has_children", logic_type=spec.logic_type, has_children=bool(spec.children))
 
         # Composite handling (unchanged from original)
         if spec.logic_type == "NOT":

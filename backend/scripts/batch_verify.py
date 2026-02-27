@@ -42,7 +42,6 @@ sys.path.insert(0, str(BACKEND_DIR))
 # Import core modules
 from core.models import DFA
 from core.oracle import get_oracle_strings
-from core.cache import DFACache
 from core.schemas import TestCase
 from core.pattern_parser import extract_quoted_pattern
 
@@ -104,56 +103,14 @@ def classify_error(exc: Exception) -> str:
 
 
 # ---------------------------------------------------------------------------
-# DEFAULT TEST SUITE
-# ---------------------------------------------------------------------------
-DEFAULT_TEST_SUITE: List[Dict[str, Any]] = [
-    {"prompt": "starts with 'a'", "category": "Atomic", "expected_type": "STARTS_WITH",
-     "must_accept": "a;ab;aa;abc", "must_reject": "b;ba;bab"},
-    {"prompt": "starts with 'ab'", "category": "Atomic", "expected_type": "STARTS_WITH",
-     "must_accept": "ab;aba;abb;abab", "must_reject": "a;ba;aab;b"},
-    {"prompt": "ends with 'b'", "category": "Atomic", "expected_type": "ENDS_WITH",
-     "must_accept": "b;ab;aab;bb", "must_reject": "a;ba;aba"},
-    {"prompt": "ends with '01'", "category": "Atomic", "expected_type": "ENDS_WITH",
-     "must_accept": "01;001;101;0101", "must_reject": "0;1;10;00;11"},
-    {"prompt": "contains '01'", "category": "Atomic", "expected_type": "CONTAINS",
-     "must_accept": "01;001;010;101;0100", "must_reject": "0;1;00;11;10"},
-    {"prompt": "contains 'aa'", "category": "Atomic", "expected_type": "CONTAINS",
-     "must_accept": "aa;aaa;baa;aab", "must_reject": "a;b;ab;ba;aba"},
-    {"prompt": "not contains '11'", "category": "Atomic", "expected_type": "NOT_CONTAINS",
-     "must_accept": "0;1;01;10;010;101", "must_reject": "11;011;110;111;0110"},
-    {"prompt": "length is 3", "category": "Atomic_Length", "expected_type": "EXACT_LENGTH",
-     "must_accept": "000;001;010;011;100;101;110;111", "must_reject": ";0;00;0000;00000"},
-    {"prompt": "length is 5", "category": "Atomic_Length", "expected_type": "EXACT_LENGTH",
-     "must_accept": "00000;00001;11111", "must_reject": ";0;0000;000000"},
-    {"prompt": "divisible by 2", "category": "Atomic_Numeric", "expected_type": "DIVISIBLE_BY",
-     "must_accept": "0;10;100;110", "must_reject": "1;11;101;111"},
-    {"prompt": "divisible by 3", "category": "Atomic_Numeric", "expected_type": "DIVISIBLE_BY",
-     "must_accept": "0;11;110;1001", "must_reject": "1;10;100;101"},
-    {"prompt": "even number of 1s", "category": "Atomic_Count", "expected_type": "EVEN_COUNT",
-     "must_accept": ";0;00;11;101;0110", "must_reject": "1;01;10;111;1101"},
-    {"prompt": "odd number of 0", "category": "Atomic_Count", "expected_type": "ODD_COUNT",
-     "must_accept": "0;100;010;001;111110", "must_reject": ";1;00;1001;0110"},
-    {"prompt": "no consecutive 1s", "category": "Atomic_Constraint", "expected_type": "NO_CONSECUTIVE",
-     "must_accept": ";0;1;01;10;010;101;0101", "must_reject": "11;011;110;111;101011"},
-    {"prompt": "starts with 'a' and ends with 'b'", "category": "Composite_Same", "expected_type": "AND",
-     "must_accept": "ab;aab;abb;abab;aabb", "must_reject": "a;b;ba;aa;bb;aba"},
-    {"prompt": "contains '00' or contains '11'", "category": "Composite_Same", "expected_type": "OR",
-     "must_accept": "00;11;001;011;100;110;0011", "must_reject": ";0;1;01;10;010;101"},
-    {"prompt": "does not start with 'a'", "category": "Negation", "expected_type": "NOT_STARTS_WITH",
-     "must_accept": "b;ba;bb;bab", "must_reject": "a;ab;aa;aba"},
-]
-
-
-# ---------------------------------------------------------------------------
 # CSV loader with schema validation
 # ---------------------------------------------------------------------------
 def load_tests_from_csv(filepath: str) -> List[Dict[str, Any]]:
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Test file not found: {filepath}")
-    
+
     tests: List[Dict[str, Any]] = []
-    load_errors = 0
-    
+
     with open(filepath, "r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row_num, row in enumerate(reader, start=2):
@@ -169,10 +126,12 @@ def load_tests_from_csv(filepath: str) -> List[Dict[str, Any]]:
                 )
                 tests.append(test_case.to_dict())
             except Exception as e:
-                load_errors += 1
-                log.warning("test_case_validation_failed", row=row_num, prompt=row.get("prompt", "")[:50], error=str(e))
-    
-    log.info("tests_loaded_from_csv", path=filepath, valid_count=len(tests), error_count=load_errors)
+                # CRITICAL: Never silently drop test cases during parsing.
+                # Log the error and raise ValueError for the orchestrator to handle.
+                log.error("fatal_schema_mismatch", row=row_num, prompt=row.get("prompt", "")[:50], error=str(e))
+                raise ValueError(f"Schema mismatch at row {row_num}: {str(e)}")
+
+    log.info("tests_loaded_from_csv", path=filepath, valid_count=len(tests))
     return tests
 
 
@@ -256,11 +215,10 @@ def _worker_run_test(case_tuple: Tuple[int, Dict[str, Any]]) -> Dict[str, Any]:
     dfa = None
     system = None
 
-    try:
-        # Initialize process-local DFAGeneratorSystem
-        from main import DFAGeneratorSystem
-        system = DFAGeneratorSystem()
-
+    # CRITICAL: Use context manager protocol for deterministic cache cleanup
+    # This guarantees cache.close() is called regardless of success/failure
+    from main import DFAGeneratorSystem
+    with DFAGeneratorSystem() as system:
         # Analyze
         spec = system.analyst.analyze(prompt)
         result["actual_type"] = spec.logic_type
@@ -292,13 +250,16 @@ def _worker_run_test(case_tuple: Tuple[int, Dict[str, Any]]) -> Dict[str, Any]:
             result["status"] = Status.FAIL
             result["error"] = error_msg or "Validation failed"
 
-    except Exception as exc:
-        result["status"] = Status.ERROR
-        result["error"] = str(exc)
-        result["error_type"] = classify_error(exc)
-        _log.error("test_error", prompt=prompt, error=str(exc), tb=traceback.format_exc(), test_index=test_idx, error_type=result["error_type"])
+    # Context manager __exit__ has been called - cache is closed
 
     result["time_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+    # CRITICAL: Return cache statistics for telemetry rollup
+    if system and hasattr(system, 'architect'):
+        result["cache_hits"] = system.architect.cache_hits
+        result["cache_misses"] = system.architect.cache_misses
+    else:
+        result["cache_hits"] = 0
+        result["cache_misses"] = 0
     _log.info("test_complete", prompt=prompt, status=result["status"], time_ms=result["time_ms"], test_index=test_idx)
     return result
 
@@ -381,8 +342,8 @@ class BatchVerifier:
         try:
             from main import DFAGeneratorSystem
             self.system = DFAGeneratorSystem(model_name=model_name, max_product_states=max_product_states)
-            self.cache = DFACache(model_version=self.model_version)
-            log.info("system_initialized", model=model_name, max_product_states=max_product_states, cache_db=self.cache.db_path)
+            # CRITICAL: diskcache with WAL mode is initialized inside ArchitectAgent
+            log.info("system_initialized", model=model_name, max_product_states=max_product_states, diskcache_wal=True)
             if self.export_failed:
                 self.failed_dfa_dir = SCRIPT_DIR / "failed_dfas"
                 self.failed_dfa_dir.mkdir(exist_ok=True)
@@ -399,8 +360,9 @@ class BatchVerifier:
             with_reject = sum(1 for t in self.test_suite if t.get("must_reject"))
             log.info("tests_loaded", source=input_file, count=len(self.test_suite), with_accept=with_accept, with_reject=with_reject)
         else:
-            self.test_suite = DEFAULT_TEST_SUITE
-            log.info("tests_loaded", source="built-in", count=len(self.test_suite))
+            # CRITICAL: No fallback to hardcoded test data. Enterprise test runners
+            # must evaluate explicitly provided data only.
+            raise ValueError("No input file provided. CSV file path is required.")
 
     def run_all_tests(self) -> None:
         """Run tests sequentially (for debugging or small suites)."""
@@ -452,14 +414,28 @@ class BatchVerifier:
         timeouts = sum(1 for r in self.results if r["status"] == Status.TIMEOUT)
         avg_ms = sum(r["time_ms"] for r in self.results) / total if total else 0
 
-        # Cache metrics from persistent cache
-        cache_metrics = {}
-        if self.cache:
-            cache_metrics = self.cache.export_metrics()
+        # CRITICAL: Aggregate cache hit/miss statistics from all test results
+        total_cache_hits = sum(r.get("cache_hits", 0) for r in self.results)
+        total_cache_misses = sum(r.get("cache_misses", 0) for r in self.results)
+        total_cache_lookups = total_cache_hits + total_cache_misses
+        cache_hit_ratio = (total_cache_hits / total_cache_lookups * 100) if total_cache_lookups > 0 else 0.0
 
-        # Calculate cache hit ratio from this run
-        total_cache_lookups = self.cache_hits + self.cache_misses
-        cache_hit_ratio = (self.cache_hits / total_cache_lookups * 100) if total_cache_lookups else 0.0
+        # Cache metrics from diskcache
+        cache_metrics = {}
+        total_entries = 0
+        
+        if self.system and hasattr(self.system, 'architect') and hasattr(self.system.architect, 'cache'):
+            try:
+                cache = self.system.architect.cache
+                total_entries = len(cache)
+                # diskcache doesn't track hits/misses internally, but we can report size
+                cache_metrics = {
+                    "cache_total_entries": total_entries,
+                    "cache_directory": cache.directory,
+                    "cache_volume_bytes": cache.volume(),
+                }
+            except Exception as e:
+                log.warning("cache_stats_failed", error=str(e))
 
         log.info(
             "batch_summary",
@@ -467,7 +443,7 @@ class BatchVerifier:
             errors=errors, timeouts=timeouts,
             pass_rate=round(passed / total * 100, 2) if total else 0,
             avg_time_ms=round(avg_ms, 2),
-            cache_hits=self.cache_hits, cache_misses=self.cache_misses,
+            cache_hits=total_cache_hits, cache_misses=total_cache_misses,
             cache_hit_ratio=round(cache_hit_ratio, 2),
             cache_persistent_metrics=cache_metrics,
         )
@@ -494,10 +470,18 @@ class BatchVerifier:
                             oracle_accept_failures=r.get("oracle_accept_failures", ""),
                             oracle_reject_failures=r.get("oracle_reject_failures", ""))
 
-        # Cache regression alert
-        if cache_hit_ratio > 10.0:
-            log.warning("cache_regression_alert", message="High prompt duplication detected",
-                        cache_hit_ratio=round(cache_hit_ratio, 2), duplicate_count=self.cache_hits)
+        # CRITICAL: Cache regression alert - only fire on actual duplicate prompts in input
+        # High cache_hit_ratio is expected behavior for repeated CI/CD runs with known prompts.
+        # Only warn if the same prompt appears multiple times in the CURRENT test suite.
+        prompt_counts: Dict[str, int] = {}
+        for r in self.results:
+            p = r["prompt"]
+            prompt_counts[p] = prompt_counts.get(p, 0) + 1
+        duplicate_prompts = sum(1 for count in prompt_counts.values() if count > 1)
+        
+        if duplicate_prompts > 0:
+            log.warning("cache_regression_alert", message="Duplicate prompts detected in test suite",
+                        duplicate_prompt_count=duplicate_prompts, total_prompts=len(self.results))
 
     def export_csv(self, filepath: str) -> None:
         if not self.results:
@@ -556,7 +540,7 @@ class BatchVerifier:
 # ---------------------------------------------------------------------------
 def main() -> int:
     parser = argparse.ArgumentParser(description="Batch Verification System for Auto-DFA (structured telemetry)")
-    parser.add_argument("--input", "-i", type=str, help="Input CSV file with test cases")
+    parser.add_argument("--input", "-i", type=str, required=True, help="Input CSV file with test cases (required)")
     parser.add_argument("--output", "-o", type=str, help="Output CSV file for results")
     parser.add_argument("--parallel", action="store_true", help="Run tests in parallel")
     parser.add_argument("--workers", type=int, default=None, help="Number of parallel workers")
@@ -576,6 +560,10 @@ def main() -> int:
     except FileNotFoundError as exc:
         log.error("input_file_not_found", error=str(exc))
         return 1
+    except ValueError as exc:
+        # CRITICAL: Schema validation errors or missing input file
+        log.error("fatal_error", error_type="schema_validation", error=str(exc))
+        return 1
 
     if args.parallel:
         verifier.run_all_tests_parallel(args.workers)
@@ -588,8 +576,13 @@ def main() -> int:
     if args.save_failures:
         verifier.export_failure_bank(args.failure_bank)
 
+    # CRITICAL: Close diskcache to flush WAL buffer to disk
+    if verifier.system:
+        verifier.system.close()
+
     failed_count = sum(1 for r in verifier.results if r["status"] in (Status.FAIL, Status.ORACLE_FAIL, Status.ERROR, Status.TIMEOUT))
-    return 1 if failed_count > 0 else 0
+    # CRITICAL: Fail if no tests were executed (prevents false-positive success)
+    return 1 if failed_count > 0 or len(verifier.results) == 0 else 0
 
 
 if __name__ == "__main__":

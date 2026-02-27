@@ -20,14 +20,17 @@ DEFAULT_MAX_PRODUCT_STATES = int(os.environ.get("AUTO_DFA_MAX_PRODUCT_STATES", "
 
 class DFAGeneratorSystem:
     """
-    Main DFA Generator System that orchestrates analysis, architecture, 
+    Main DFA Generator System that orchestrates analysis, architecture,
     validation, and repair of DFAs from natural language descriptions.
-    
+
     Note: Server-side visualization has been removed. The frontend handles
     all DFA rendering using Mermaid.js. This eliminates the Graphviz
     dependency for typical usage.
-    """
     
+    CRITICAL: Implements Context Manager protocol for deterministic resource cleanup.
+    Always use with 'with DFAGeneratorSystem() as system:' to ensure cache is properly closed.
+    """
+
     def __init__(self, model_name: str = DEFAULT_MODEL_NAME, max_product_states: int = DEFAULT_MAX_PRODUCT_STATES):
         self.validator = DeterministicValidator()
         # Agents accept model_name for LLM-backed behavior
@@ -38,6 +41,40 @@ class DFAGeneratorSystem:
         self.max_product_states = int(max_product_states)
         self.max_retries = 3
         logger.info(f"--- System Initialized: model={model_name} max_product_states={self.max_product_states} ---")
+
+    def __enter__(self) -> 'DFAGeneratorSystem':
+        """Context manager entry - returns self for use in with block."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        """
+        Context manager exit - guarantees cache cleanup regardless of exception.
+        
+        Args:
+            exc_type: Exception type if an exception was raised
+            exc_val: Exception value if an exception was raised
+            exc_tb: Exception traceback if an exception was raised
+            
+        Returns:
+            False to propagate any exception, True to suppress it
+        """
+        self.close()
+        return False  # Do not suppress exceptions
+
+    def close(self) -> None:
+        """
+        CRITICAL: Explicitly close diskcache to flush WAL buffer to disk.
+        Must be called before process exit to prevent cache data loss.
+        """
+        try:
+            self.architect.cache.close()
+            logger.debug("[Cache] diskcache flushed and closed")
+        except Exception as e:
+            logger.warning(f"[Cache] Failed to close: {e}")
+
+    def __del__(self):
+        """Destructor ensures cache is closed when object is garbage collected."""
+        self.close()
 
     def export_to_json(self, dfa: DFA, filename: str = 'dfa_result') -> str:
         """

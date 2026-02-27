@@ -10,8 +10,6 @@ from .oracle import (
     CompositeOracleSolver,
 )
 
-from .cache import DFACache
-
 from .schemas import (
     TestCase,
     TestResult,
@@ -36,8 +34,6 @@ __all__ = [
     "get_oracle_strings",
     "detect_contradiction",
     "CompositeOracleSolver",
-    # Cache
-    "DFACache",
     # Schemas
     "TestCase",
     "TestResult",
