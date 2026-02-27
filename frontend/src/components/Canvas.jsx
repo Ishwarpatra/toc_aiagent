@@ -24,80 +24,76 @@ export default function Canvas({ data, loading, error }) {
     }
   }, [data]);
 
-  // Smart horizontal layout - states flow left to right
-  const calculateLayout = useCallback((states, startState, acceptStates) => {
+  // Layered Layout Algorithm (BFS-based) - Creates a clean left-to-right flow
+  const calculateLayout = useCallback((states, startState, acceptStates, transitions) => {
     const positions = {};
-    const nodeCount = states.length;
+    if (states.length === 0) return positions;
 
-    if (nodeCount === 0) return positions;
+    const padding = 150;
+    const nodeRadius = 45;
+    const horizontalSpacing = 280;
+    const verticalSpacing = 220;
 
-    // Calculate canvas dimensions - slightly tighter for "smaller" default feel
-    const padding = 120;
-    const nodeRadius = 40;
-    const horizontalSpacing = 220;
-    const verticalSpacing = 200;
+    // 1. Assign ranks (layers) using BFS
+    const ranks = {};
+    const queue = [{ state: startState, depth: 0 }];
+    const visited = new Set();
+    visited.add(startState);
 
-    // Sort states: start first, then regular, accept states, dead last
-    const sortedStates = [];
+    let maxDepth = 0;
+    while (queue.length > 0) {
+      const { state, depth } = queue.shift();
+      ranks[state] = depth;
+      maxDepth = Math.max(maxDepth, depth);
 
-    // Start state first
-    if (states.includes(startState)) {
-      sortedStates.push(startState);
-    }
-
-    // Regular states (not start, not accept, not dead)
-    states.forEach(s => {
-      if (s !== startState && !acceptStates.includes(s) && !s.toLowerCase().includes('dead')) {
-        sortedStates.push(s);
-      }
-    });
-
-    // Accept states
-    acceptStates.forEach(s => {
-      if (s !== startState && !sortedStates.includes(s)) {
-        sortedStates.push(s);
-      }
-    });
-
-    // Dead states last
-    states.forEach(s => {
-      if (s.toLowerCase().includes('dead') && !sortedStates.includes(s)) {
-        sortedStates.push(s);
-      }
-    });
-
-    // Layout based on state count
-    if (nodeCount <= 2) {
-      // Simple horizontal layout
-      sortedStates.forEach((state, i) => {
-        positions[state] = {
-          x: padding + nodeRadius + i * horizontalSpacing,
-          y: 200,
-        };
-      });
-    } else if (nodeCount <= 4) {
-      // Two rows for 3-4 states
-      const colCount = 2;
-      sortedStates.forEach((state, i) => {
-        const row = Math.floor(i / colCount);
-        const col = i % colCount;
-        positions[state] = {
-          x: padding + nodeRadius + col * horizontalSpacing,
-          y: padding + nodeRadius + row * verticalSpacing,
-        };
-      });
-    } else {
-      // Grid layout for more states
-      const cols = 3;
-      sortedStates.forEach((state, i) => {
-        const row = Math.floor(i / cols);
-        const col = i % cols;
-        positions[state] = {
-          x: padding + nodeRadius + col * horizontalSpacing,
-          y: padding + nodeRadius + row * verticalSpacing,
-        };
+      // Explore neighbors from transitions
+      const neighbors = transitions[state] ? Object.values(transitions[state]) : [];
+      neighbors.forEach(neighbor => {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push({ state: neighbor, depth: depth + 1 });
+        }
       });
     }
+
+    // Handle unreachable states (rare but possible in design phase)
+    states.forEach(state => {
+      if (ranks[state] === undefined) {
+        ranks[state] = maxDepth + 1;
+      }
+    });
+
+    // 2. Group states by rank
+    const statesByRank = {};
+    states.forEach(state => {
+      const r = ranks[state];
+      if (!statesByRank[r]) statesByRank[r] = [];
+      statesByRank[r].push(state);
+    });
+
+    // 3. Position states
+    Object.keys(statesByRank).forEach(rankStr => {
+      const rank = parseInt(rankStr);
+      const statesInRank = statesByRank[rank];
+
+      // Sort within rank: accept states in middle, dead states at edges
+      statesInRank.sort((a, b) => {
+        const isAcceptA = acceptStates.includes(a);
+        const isAcceptB = acceptStates.includes(b);
+        if (isAcceptA && !isAcceptB) return -1;
+        if (!isAcceptA && isAcceptB) return 1;
+        return 0;
+      });
+
+      const totalHeight = (statesInRank.length - 1) * verticalSpacing;
+
+      statesInRank.forEach((state, i) => {
+        positions[state] = {
+          x: padding + nodeRadius + rank * horizontalSpacing,
+          y: padding + 300 + (i * verticalSpacing) - (totalHeight / 2)
+        };
+      });
+    });
 
     return positions;
   }, []);
@@ -180,7 +176,7 @@ export default function Canvas({ data, loading, error }) {
 
     const { states, start_state, accept_states, transitions } = data.dfa;
     const nodeRadius = 40;
-    const positions = calculateLayout(states, start_state, accept_states);
+    const positions = calculateLayout(states, start_state, accept_states, transitions);
 
     // Calculate bounding box with extra padding for labels and arrows
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -202,14 +198,18 @@ export default function Canvas({ data, loading, error }) {
 
     let svgContent = "";
 
+    // SVG Accessibility Title
+    const titleText = `DFA: ${states.length} states, start: ${start_state}, accept: ${accept_states.join(', ')}`;
+    svgContent += `<title>${titleText}</title>`;
+
     // SVG Definitions
     svgContent += `
       <defs>
-        <marker id="arrow" markerWidth="14" markerHeight="10" refX="13" refY="5" orient="auto">
-          <path d="M 0 0 L 14 5 L 0 10 L 3 5 Z" fill="#64748b"/>
+        <marker id="arrow" markerWidth="16" markerHeight="12" refX="15" refY="6" orient="auto">
+          <path d="M 0 0 L 16 6 L 0 12 L 4 6 Z" fill="#1e293b"/>
         </marker>
-        <marker id="arrow-self" markerWidth="12" markerHeight="9" refX="11" refY="4.5" orient="auto">
-          <path d="M 0 0 L 12 4.5 L 0 9 L 2.5 4.5 Z" fill="#64748b"/>
+        <marker id="arrow-self" markerWidth="14" markerHeight="10" refX="13" refY="5" orient="auto">
+          <path d="M 0 0 L 14 5 L 0 10 L 3 5 Z" fill="#475569"/>
         </marker>
         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.2"/>
@@ -248,14 +248,15 @@ export default function Canvas({ data, loading, error }) {
 
       if (!path) return;
 
-      // Edge line
+      // Edge line - darker and thicker for better visibility
       svgContent += `
         <path 
           d="${path}" 
           fill="none" 
-          stroke="#94a3b8" 
-          stroke-width="3"
+          stroke="${isSelfLoop ? '#64748b' : '#334155'}" 
+          stroke-width="3.5"
           marker-end="url(#${isSelfLoop ? 'arrow-self' : 'arrow'})"
+          stroke-linecap="round"
         />
       `;
 
@@ -265,7 +266,7 @@ export default function Canvas({ data, loading, error }) {
 
       if (isSelfLoop) {
         labelX = positions[src].x;
-        labelY = positions[src].y - nodeRadius - 75;
+        labelY = positions[src].y - nodeRadius - 90; // Moved higher to avoid overlapping loops
       } else {
         const dx = positions[dest].x - positions[src].x;
         const dy = positions[dest].y - positions[src].y;
@@ -275,25 +276,25 @@ export default function Canvas({ data, loading, error }) {
         const curvature = Math.min(50, dist * 0.18);
         const nx = dx / dist;
         const ny = dy / dist;
-        labelX = midX - ny * (curvature + 20);
-        labelY = midY + nx * (curvature + 20);
+        labelX = midX - ny * (curvature + 35); // Moved further from line
+        labelY = midY + nx * (curvature + 35);
       }
 
-      const labelWidth = label.length * 10 + 16;
+      const labelWidth = label.length * 11 + 20;
       svgContent += `
         <rect 
-          x="${labelX - labelWidth / 2}" y="${labelY - 12}" 
-          width="${labelWidth}" height="24" 
-          rx="5" fill="white" stroke="#e2e8f0" stroke-width="1.2"
+          x="${labelX - labelWidth / 2}" y="${labelY - 14}" 
+          width="${labelWidth}" height="28" 
+          rx="6" fill="white" stroke="${isSelfLoop ? '#94a3b8' : '#475569'}" stroke-width="2"
           filter="url(#shadow)"
         />
         <text 
-          x="${labelX}" y="${labelY + 5}" 
+          x="${labelX}" y="${labelY + 6}" 
           text-anchor="middle" 
-          font-size="14" 
-          font-weight="700"
+          font-size="16" 
+          font-weight="900"
           font-family="Inter, system-ui, sans-serif"
-          fill="#334155"
+          fill="#0f172a"
         >${label}</text>
       `;
     });
@@ -428,18 +429,38 @@ export default function Canvas({ data, loading, error }) {
           ref={svgRef}
           className="dfa-svg"
           preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label={data?.dfa ? `DFA diagram with ${data.dfa.states.length} states, alphabet: ${data.dfa.alphabet.join(', ')}` : 'DFA diagram'}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === '+' || e.key === '=') setTransform(prev => ({ ...prev, scale: Math.min(3, prev.scale + 0.1) }));
+            if (e.key === '-') setTransform(prev => ({ ...prev, scale: Math.max(0.2, prev.scale - 0.1) }));
+            if (e.key === '0') setTransform({ x: 0, y: 0, scale: 0.7 });
+          }}
         />
 
         {/* Zoom Controls Overlay */}
-        <div className="zoom-controls">
-          <button onClick={() => setTransform(prev => ({ ...prev, scale: Math.min(3, prev.scale + 0.1) }))}>+</button>
-          <button onClick={() => setTransform(prev => ({ ...prev, scale: Math.max(0.2, prev.scale - 0.1) }))}>−</button>
-          <button onClick={() => setTransform({ x: 0, y: 0, scale: 0.7 })}>⟲</button>
+        <div className="zoom-controls" role="toolbar" aria-label="Zoom controls">
+          <button
+            onClick={() => setTransform(prev => ({ ...prev, scale: Math.min(3, prev.scale + 0.1) }))}
+            aria-label="Zoom in"
+            title="Zoom in"
+          >+</button>
+          <button
+            onClick={() => setTransform(prev => ({ ...prev, scale: Math.max(0.2, prev.scale - 0.1) }))}
+            aria-label="Zoom out"
+            title="Zoom out"
+          >−</button>
+          <button
+            onClick={() => setTransform({ x: 0, y: 0, scale: 0.7 })}
+            aria-label="Reset zoom"
+            title="Reset zoom"
+          >⟲</button>
         </div>
 
         {/* DFA Info Panel */}
         {data?.dfa && (
-          <div className="dfa-info">
+          <div className="dfa-info" role="status" aria-live="polite" aria-label="DFA properties">
             <div className="dfa-info-title">DFA Properties</div>
             <div className="dfa-info-item">
               <span className="dfa-info-label">States</span>

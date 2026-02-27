@@ -1,7 +1,12 @@
 // frontend/src/App.jsx - Professional DFA Editor
 import { useState } from "react";
 import Canvas from "./components/Canvas";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
+
+// API URL from environment variable with fallback to localhost for development
+// Empty string means use relative paths (for nginx proxy in production)
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "" : "http://localhost:8000");
 
 // Example prompts for quick selection
 const EXAMPLE_PROMPTS = [
@@ -11,6 +16,48 @@ const EXAMPLE_PROMPTS = [
   "even number of 1s",
   "divisible by 3",
 ];
+
+/**
+ * Parse error response and return appropriate user-friendly message
+ */
+const parseErrorResponse = (errorData, statusCode) => {
+  const detail = errorData?.detail;
+
+  if (typeof detail === "object" && detail !== null) {
+    const errorType = detail.error_type || "Unknown";
+    const errorMsg = detail.error || "An error occurred";
+    const hint = detail.hint || "";
+
+    // Format based on error type
+    switch (errorType) {
+      case "ServiceUnavailable":
+        return `Service unavailable: ${errorMsg}${hint ? ` (${hint})` : ""}`;
+      case "ValidationError":
+        return `Invalid request: ${errorMsg}${hint ? `. Hint: ${hint}` : ""}`;
+      case "ConnectionError":
+        return `Connection failed: ${errorMsg}`;
+      default:
+        return `${errorMsg}${hint ? ` - ${hint}` : ""}`;
+    }
+  }
+
+  // Handle string detail or fallback
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  // Default messages based on status code
+  switch (statusCode) {
+    case 503:
+      return "Service unavailable. Is the Ollama AI service running?";
+    case 400:
+      return "Invalid request. Check your prompt format.";
+    case 500:
+      return "Internal server error. Please try again later.";
+    default:
+      return "Backend connection failed";
+  }
+};
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
@@ -25,7 +72,7 @@ export default function App() {
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:8000/generate", {
+      const response = await fetch(`${API_URL}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt }),
@@ -33,14 +80,19 @@ export default function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail?.error || "Backend connection failed");
+        throw new Error(parseErrorResponse(errorData, response.status));
       }
 
       const data = await response.json();
       setDfaData(data);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Error: Ensure the Python API is running on port 8000.");
+      // Check if it's a network error (fetch failed entirely)
+      if (err.name === "TypeError" && err.message.includes("fetch")) {
+        setError(`Cannot connect to API at ${API_URL}. Ensure the backend is running.`);
+      } else {
+        setError(err.message || "Error: Ensure the Python API is running.");
+      }
     } finally {
       setLoading(false);
     }
@@ -124,8 +176,10 @@ Examples:
           </div>
         </aside>
 
-        {/* Main Canvas - No bottom bar anymore */}
-        <Canvas data={dfaData} loading={loading} error={error} />
+        {/* Main Canvas - wrapped in ErrorBoundary */}
+        <ErrorBoundary>
+          <Canvas data={dfaData} loading={loading} error={error} />
+        </ErrorBoundary>
       </div>
     </div>
   );
