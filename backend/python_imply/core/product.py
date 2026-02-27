@@ -178,14 +178,76 @@ class ProductConstructionEngine:
         # 🟢 MINIMIZE: Clean up "useless" redundant states immediately
         return self.minimize(raw_product)
 
-    def invert(self, dfa: DFA) -> DFA:
-        print(f"\n[Product Engine] Inverting DFA (NOT logic)...")
-        new_accept_states = [s for s in dfa.states if s not in dfa.accept_states]
+    def complete_dfa(self, dfa: DFA) -> DFA:
+        """
+        Make DFA fully-defined by adding a trap state for missing transitions.
+        
+        This is CRITICAL for inversion: if a DFA has incomplete transitions,
+        inverting it (swapping accept/reject) will produce incorrect results
+        because strings that would have "fallen off" the DFA are now incorrectly
+        handled.
+        
+        Example: A DFA for "contains 'ab'" might not have transitions from
+        all states for all symbols. Without completion, NOT("contains 'ab'")
+        would fail to reject strings correctly.
+        """
+        # Check if already complete
+        missing = False
+        for state in dfa.states:
+            for sym in dfa.alphabet:
+                if sym not in dfa.transitions.get(state, {}):
+                    missing = True
+                    break
+            if missing:
+                break
+        
+        if not missing:
+            return dfa  # Already complete
+        
+        # Add trap state
+        trap_state = "q_trap"
+        new_states = dfa.states + [trap_state] if trap_state not in dfa.states else dfa.states
+        
+        # Copy transitions and fill gaps
+        new_transitions = {s: dict(dfa.transitions.get(s, {})) for s in dfa.states}
+        new_transitions[trap_state] = {}
+        
+        for state in new_states:
+            for sym in dfa.alphabet:
+                if sym not in new_transitions.get(state, {}):
+                    if state not in new_transitions:
+                        new_transitions[state] = {}
+                    new_transitions[state][sym] = trap_state
+        
+        print(f"   -> [Complete] Added trap state for {sum(1 for s in new_states for sym in dfa.alphabet if new_transitions[s][sym] == trap_state)} missing transitions")
+        
         return DFA(
-            reasoning=f"NOT ({dfa.reasoning})",
-            states=dfa.states,
+            reasoning=dfa.reasoning + " (completed)",
+            states=sorted(new_states),
             alphabet=dfa.alphabet,
-            transitions=dfa.transitions,
+            transitions=new_transitions,
             start_state=dfa.start_state,
+            accept_states=dfa.accept_states  # Trap state is NOT accepting
+        )
+
+    def invert(self, dfa: DFA) -> DFA:
+        """
+        Invert a DFA (NOT logic) - swap accepting and non-accepting states.
+        
+        CRITICAL FIX: Complete the DFA first to ensure all transitions exist.
+        Otherwise, strings with missing transitions are incorrectly handled.
+        """
+        print(f"\n[Product Engine] Inverting DFA (NOT logic)...")
+        
+        # CRITICAL: Complete DFA before inversion
+        completed_dfa = self.complete_dfa(dfa)
+        
+        new_accept_states = [s for s in completed_dfa.states if s not in completed_dfa.accept_states]
+        return DFA(
+            reasoning=f"NOT ({completed_dfa.reasoning})",
+            states=completed_dfa.states,
+            alphabet=completed_dfa.alphabet,
+            transitions=completed_dfa.transitions,
+            start_state=completed_dfa.start_state,
             accept_states=sorted(new_accept_states)
         )

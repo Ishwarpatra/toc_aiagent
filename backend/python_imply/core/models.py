@@ -22,7 +22,7 @@ class LogicSpec(BaseModel):
     @classmethod
     def from_prompt(cls, user_prompt: str) -> Optional["LogicSpec"]:
         """
-        Heuristic atomic parser:
+        Heuristic atomic parser with semantic normalization:
         - Detects atomic types including:
             STARTS_WITH, ENDS_WITH, CONTAINS, NOT_CONTAINS, NO_CONSECUTIVE,
             DIVISIBLE_BY, ODD_COUNT, EVEN_COUNT,
@@ -35,33 +35,47 @@ class LogicSpec(BaseModel):
         if not user_prompt:
             return None
 
-        user_lower = user_prompt.lower()
+        # Import normalizer here to avoid circular imports
+        from .normalizer import SemanticNormalizer
+
+        # Use semantic normalizer to extract context and identify operation type
+        normalizer = SemanticNormalizer()
+        cleaned_prompt, extracted_alphabet = normalizer.extract_context_info(user_prompt)
+        user_lower = cleaned_prompt.lower()
+
+        # Try to identify operation type using synonyms
+        identified_type = normalizer.identify_operation_type(user_prompt)
+
+        deduced_type = None
+        deduced_target = None
+        deduced_alphabet = extracted_alphabet  # Use extracted alphabet from context
 
         # If prompt appears composite, bail out here (AnalystAgent will handle)
         if " and " in user_lower or " or " in user_lower:
             return None
 
-        deduced_type = None
-        deduced_target = None
-        deduced_alphabet = ["0", "1"]
+        # If we identified a type from synonyms, use it as priority
+        if identified_type:
+            deduced_type = identified_type
 
         # --- LENGTH-based patterns ---
-        # exact: "length is 5", "strings of length 5", "length = 5"
-        m = re.search(r"(?:length|len)(?:\s*(?:is|=)|\s+of\s+length\s+|\s*)\s*(\d+)\b", user_lower)
+        # exact: "length is 5", "strings of length 5", "length = 5", "exactly 7 characters"
+        # Also handle synonyms like "no less than", "at least", etc.
+        m = re.search(r"(?:exactly|length|len)(?:\s*(?:is|=)|\s+of\s+length\s+|\s*)\s*(\d+)\b", user_lower)
         if m:
             deduced_type = "EXACT_LENGTH"
             deduced_target = m.group(1)
             return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
 
-        # min length: "length >= 3", "at least 3 characters", "minimum length 3"
-        m = re.search(r"(?:at least|min(?:imum)?\s*length|length\s*(?:>=|>=\s*|>=\s*))\s*(\d+)\b", user_lower)
+        # min length: "length >= 3", "at least 3 characters", "minimum length 3", "no less than 3"
+        m = re.search(r"(?:at least|min(?:imum)?\s*length|length\s*(?:>=|>=\s*|>=\s*)|no less than|minimum of)\s*(\d+)\b", user_lower)
         if m:
             deduced_type = "MIN_LENGTH"
             deduced_target = m.group(1)
             return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
 
-        # max length: "length <= 7", "at most 7 characters", "maximum length 7"
-        m = re.search(r"(?:at most|max(?:imum)?\s*length|length\s*(?:<=|<=\s*|<=\s*))\s*(\d+)\b", user_lower)
+        # max length: "length <= 7", "at most 7 characters", "maximum length 7", "no more than 7"
+        m = re.search(r"(?:at most|max(?:imum)?\s*length|length\s*(?:<=|<=\s*|<=\s*)|no more than|maximum of)\s*(\d+)\b", user_lower)
         if m:
             deduced_type = "MAX_LENGTH"
             deduced_target = m.group(1)
@@ -91,21 +105,29 @@ class LogicSpec(BaseModel):
                 deduced_alphabet = [sym, 'b' if sym != 'b' else 'a']
             return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
 
-        # Even/Odd count shorthand: 
-        # Handles: "even number of 1s", "odd number of 0", "odd count of 1", "even number of 'a's"
-        # Pattern breakdown:
-        #   (odd|even) - parity word
-        #   \s+(number|count)\s+of\s+ - "number of" or "count of"
-        #   ['\"]? - optional opening quote
-        #   ([0-9a-zA-Z]) - the character to count
-        #   ['\"]? - optional closing quote
-        #   s? - optional trailing 's' (for plurals like "1s" or "a's")
+        # Even/Odd count shorthand:
+        # Handles: "even number of 1s", "count of 1 is even", "odd count of 1"
         parity_match = re.search(
             r"(odd|even)\s+(?:number|count)\s+of\s+['\"]?([0-9a-zA-Z])['\"]?s?",
             user_lower
         )
-        if parity_match:
-            ptype, char = parity_match.groups()
+        if not parity_match:
+            # Try alternate phrasing: "count of 1 is even"
+            parity_match = re.search(
+                r"(?:count|number)\s+of\s+['\"]?([0-9a-zA-Z])['\"]?s?\s+(?:is\s+)?(even|odd)",
+                user_lower
+            )
+            if parity_match:
+                # swap groups for unified handling
+                char, ptype = parity_match.groups()
+                parity_match_data = (ptype, char)
+            else:
+                parity_match_data = None
+        else:
+            parity_match_data = parity_match.groups()
+
+        if parity_match_data:
+            ptype, char = parity_match_data
             deduced_type = "ODD_COUNT" if ptype == "odd" else "EVEN_COUNT"
             deduced_target = char
             deduced_alphabet = ['0', '1'] if char in '01' else [char, 'b' if char != 'b' else 'a']
@@ -118,10 +140,10 @@ class LogicSpec(BaseModel):
             # There isn't an explicit PRODUCT_ODD builder; handle by NOT(PRODUCT_EVEN) in composed specs
             return cls(logic_type="PRODUCT_ODD", target=None, alphabet=deduced_alphabet)
 
-        # Divisible by (numeric)
-        if "divisible by" in user_lower:
+        # Divisible by (numeric) / Multiple of
+        if re.search(r"divisible\s+by|multiple\s+of", user_lower):
             deduced_type = "DIVISIBLE_BY"
-            div_match = re.search(r"divisible\s+by\s+(\d+)", user_lower)
+            div_match = re.search(r"(?:divisible\s+by|multiple\s+of)\s+(\d+)", user_lower)
             if div_match:
                 deduced_target = div_match.group(1)
                 return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
@@ -136,31 +158,46 @@ class LogicSpec(BaseModel):
             return cls(logic_type=deduced_type, target=deduced_target, alphabet=deduced_alphabet)
 
         # Negations / basic patterns
-        # Negations / basic patterns with improved typo-robustness
-        if re.search(r"not\s+st[art]{2,}s?|does\s+not\s+st[art]{2,}s?", user_lower):
-            deduced_type = "NOT_STARTS_WITH"
-        elif re.search(r"st[art]{2,}s?|beg[in]{2,}s?", user_lower):
-            deduced_type = "STARTS_WITH"
-        elif re.search(r"not\s+en[ds]{1,}|does\s+not\s+en[ds]{1,}", user_lower):
-            deduced_type = "NOT_ENDS_WITH"
-        elif re.search(r"en[ds]{1,2}\b", user_lower):
-            deduced_type = "ENDS_WITH"
-        elif re.search(r"not\s+cont[ain]{2,}|does\s+not\s+cont[ain]{2,}", user_lower):
-            deduced_type = "NOT_CONTAINS"
-        elif re.search(r"cont[ain]{2,}s?|incl[ude]{2,}s?", user_lower):
-            deduced_type = "CONTAINS"
-
-        # If we have an atomic type that expects a target, extract it
-        if deduced_type and deduced_type not in ["DIVISIBLE_BY", "ODD_COUNT", "EVEN_COUNT", "PRODUCT_EVEN", "PRODUCT_ODD"]:
+        # If we already identified the type from synonyms, try to extract target
+        if deduced_type and identified_type:
             # Try quoted targets first (e.g., 'ab', "01")
             quote_match = re.search(r"['\"]([0-9a-zA-Z]+)['\"]", user_lower)
             if quote_match:
                 deduced_target = quote_match.group(1)
             else:
                 # Try unquoted pattern like "starts with ab" or "contains 01"
-                unquoted_match = re.search(r"(?:with|contains?)\s+([0-9a-zA-Z]+)\b", user_lower)
+                unquoted_match = re.search(r"(?:with|contains?|of)\s+([0-9a-zA-Z]+)\b", user_lower)
                 if unquoted_match:
                     deduced_target = unquoted_match.group(1)
+        else:
+            # Negations / basic patterns with improved typo-robustness
+            # Handle: "not starts", "does not start", "doesn't start", "not prefixed by", "has no prefix"
+            if re.search(r"(?:not|doesn'?t)\s+st[art]{2,}s?|does\s+not\s+st[art]{2,}s?|not\s+prefixed\s+by|has\s+no\s+prefix", user_lower):
+                deduced_type = "NOT_STARTS_WITH"
+            elif re.search(r"st[art]{2,}s?|beg[in]{2,}s?|prefix\s+|has\s+prefix", user_lower):
+                deduced_type = "STARTS_WITH"
+            # Handle: "not ends", "does not end", "doesn't end", "not suffixed by", "no suffix"
+            elif re.search(r"(?:not|doesn'?t)\s+en[ds]{1,}(?:ing)?\b|does\s+not\s+en[ds]{1,}(?:ing)?\b|not\s+suffixed\s+by|no\s+suffix", user_lower):
+                deduced_type = "NOT_ENDS_WITH"
+            elif re.search(r"en[ds]{1,2}(?:ing)?\b|suffix\s+|has\s+suffix", user_lower):
+                deduced_type = "ENDS_WITH"
+            # Handle: "not contain", "does not contain", "doesn't contain", "without", "free of"
+            elif re.search(r"(?:not|doesn'?t)\s+cont[ain]{2,}|does\s+not\s+cont[ain]{2,}|without\s+|free\s+of\s+", user_lower):
+                deduced_type = "NOT_CONTAINS"
+            elif re.search(r"cont[ain]{2,}s?|incl[ude]{2,}s?|substring\s+|has\s+substring", user_lower):
+                deduced_type = "CONTAINS"
+
+            # If we have an atomic type that expects a target, extract it
+            if deduced_type and deduced_type not in ["DIVISIBLE_BY", "ODD_COUNT", "EVEN_COUNT", "PRODUCT_EVEN", "PRODUCT_ODD"]:
+                # Try quoted targets first (e.g., 'ab', "01")
+                quote_match = re.search(r"['\"]([0-9a-zA-Z]+)['\"]", user_lower)
+                if quote_match:
+                    deduced_target = quote_match.group(1)
+                else:
+                    # Try unquoted pattern like "starts with ab" or "contains 01"
+                    unquoted_match = re.search(r"(?:with|contains?)\s+([0-9a-zA-Z]+)\b", user_lower)
+                    if unquoted_match:
+                        deduced_target = unquoted_match.group(1)
 
         # If we have a target, derive alphabet conservatively
         if deduced_target:

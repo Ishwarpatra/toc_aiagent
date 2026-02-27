@@ -1,7 +1,7 @@
 import logging
 from typing import Tuple, List, Dict
 
-from core.models import DFA, LogicSpec
+from .models import DFA, LogicSpec
 
 logger = logging.getLogger(__name__)
 

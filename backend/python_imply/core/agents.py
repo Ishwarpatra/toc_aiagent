@@ -1,9 +1,11 @@
 import json
 import re
 import logging
-from typing import List, Dict, Optional, Tuple
+import hashlib
+from typing import List, Dict, Optional, Tuple, Any
+import diskcache as dc
 
-from core.models import LogicSpec, DFA
+from .models import LogicSpec, DFA
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +32,13 @@ def split_top_level(expr: str, sep: str) -> List[str]:
     """
     parts = []
     buf = []
-    depth = 0
-    in_quote = False
-    quote_char = None
-    i = 0
-    L = len(expr)
+    depth: int = 0
+    in_quote: bool = False
+    quote_char: Optional[str] = None
+    i: int = 0
+    L: int = len(expr)
     while i < L:
-        ch = expr[i]
+        ch: str = expr[i]
         if ch in ('"', "'"):
             if in_quote and ch == quote_char:
                 in_quote = False
@@ -155,7 +157,7 @@ def estimate_states_for_spec(spec: LogicSpec) -> int:
 # --- DFA builders for atomic specs (these return dicts convertible to DFA model) ---
 
 
-def build_starts_with_dfa(alphabet: List[str], pattern: str) -> Dict:
+def build_starts_with_dfa(alphabet: List[str], pattern: str) -> Dict[str, Any]:
     """
     Build a DFA that accepts strings starting with the given pattern.
     
@@ -171,7 +173,7 @@ def build_starts_with_dfa(alphabet: List[str], pattern: str) -> Dict:
     accept_state = f"q{n}"
     accept = [accept_state]
     
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     
     # Transitions for matching states (q0 to q{n-1})
     for i in range(n):
@@ -201,7 +203,7 @@ def build_starts_with_dfa(alphabet: List[str], pattern: str) -> Dict:
     }
 
 
-def build_substring_dfa(alphabet: List[str], pattern: str, match_at_end_only: bool = False, sink_on_full: bool = False) -> Dict:
+def build_substring_dfa(alphabet: List[str], pattern: str, match_at_end_only: bool = False, sink_on_full: bool = False) -> Dict[str, Any]:
     """
     Build a DFA that matches strings containing the given pattern.
     
@@ -212,8 +214,8 @@ def build_substring_dfa(alphabet: List[str], pattern: str, match_at_end_only: bo
     m = len(pattern)
     
     # Build KMP failure function for efficient transitions
-    pi = [0] * m
-    k = 0
+    pi: List[int] = [0] * m
+    k: int = 0
     for i in range(1, m):
         while k > 0 and pattern[k] != pattern[i]:
             k = pi[k - 1]
@@ -238,7 +240,7 @@ def build_substring_dfa(alphabet: List[str], pattern: str, match_at_end_only: bo
         total_states = m + 1
     
     states = [f"q{i}" for i in range(total_states)]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     accept_state = f"q{m}"
     
     # Build transitions
@@ -281,15 +283,15 @@ def build_substring_dfa(alphabet: List[str], pattern: str, match_at_end_only: bo
     }
 
 
-def build_not_contains_dfa(alphabet: List[str], pattern: str) -> Dict:
+def build_not_contains_dfa(alphabet: List[str], pattern: str) -> Dict[str, Any]:
     # build substring dfa with match sink; accept all non-sink states
     return build_substring_dfa(alphabet, pattern, sink_on_full=True)
 
 
-def build_no_consecutive_dfa(alphabet: List[str], target: str) -> Dict:
+def build_no_consecutive_dfa(alphabet: List[str], target: str) -> Dict[str, Any]:
     t = target
     states = ["q0", "q1", "sink"]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for sym in alphabet:
         if sym == t:
             transitions["q0"][sym] = "q1"
@@ -302,9 +304,9 @@ def build_no_consecutive_dfa(alphabet: List[str], target: str) -> Dict:
     return {"states": states, "alphabet": alphabet, "start_state": "q0", "accept_states": ["q0", "q1"], "transitions": transitions}
 
 
-def build_exact_length_dfa(alphabet: List[str], n: int) -> Dict:
+def build_exact_length_dfa(alphabet: List[str], n: int) -> Dict[str, Any]:
     states = [f"q{i}" for i in range(n + 2)]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for i in range(n + 1):
         for sym in alphabet:
             if i < n:
@@ -316,9 +318,9 @@ def build_exact_length_dfa(alphabet: List[str], n: int) -> Dict:
     return {"states": states, "alphabet": alphabet, "start_state": "q0", "accept_states": [f"q{n}"], "transitions": transitions}
 
 
-def build_min_length_dfa(alphabet: List[str], n: int) -> Dict:
+def build_min_length_dfa(alphabet: List[str], n: int) -> Dict[str, Any]:
     states = [f"q{i}" for i in range(n + 1)]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for i in range(n):
         for sym in alphabet:
             transitions[f"q{i}"][sym] = f"q{i+1}"
@@ -327,9 +329,9 @@ def build_min_length_dfa(alphabet: List[str], n: int) -> Dict:
     return {"states": states, "alphabet": alphabet, "start_state": "q0", "accept_states": [f"q{n}"], "transitions": transitions}
 
 
-def build_max_length_dfa(alphabet: List[str], n: int) -> Dict:
+def build_max_length_dfa(alphabet: List[str], n: int) -> Dict[str, Any]:
     states = [f"q{i}" for i in range(n + 2)]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for i in range(n):
         for sym in alphabet:
             transitions[f"q{i}"][sym] = f"q{i+1}"
@@ -339,42 +341,134 @@ def build_max_length_dfa(alphabet: List[str], n: int) -> Dict:
     return {"states": states, "alphabet": alphabet, "start_state": "q0", "accept_states": [f"q{i}" for i in range(n + 1)], "transitions": transitions}
 
 
-def build_length_mod_k_dfa(alphabet: List[str], k: int, r: int = 0) -> Dict:
+def build_length_mod_k_dfa(alphabet: List[str], k: int, r: int = 0) -> Dict[str, Any]:
     states = [f"q{i}" for i in range(k)]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for i in range(k):
         for sym in alphabet:
             transitions[f"q{i}"][sym] = f"q{(i + 1) % k}"
     return {"states": states, "alphabet": alphabet, "start_state": "q0", "accept_states": [f"q{r % k}"], "transitions": transitions}
 
 
-def build_count_mod_k_dfa(alphabet: List[str], target_symbol: str, k: int, r: int = 0) -> Dict:
+def build_count_mod_k_dfa(alphabet: List[str], target_symbol: str, k: int, r: int = 0) -> Dict[str, Any]:
     states = [f"q{i}" for i in range(k)]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for i in range(k):
         for sym in alphabet:
             transitions[f"q{i}"][sym] = f"q{(i + (1 if sym == target_symbol else 0)) % k}"
     return {"states": states, "alphabet": alphabet, "start_state": "q0", "accept_states": [f"q{r % k}"], "transitions": transitions}
 
 
-def build_divisible_by_dfa(alphabet: List[str], k: int) -> Dict:
-    # Determine base and mapping
-    base = None
-    mapping = {}
-    if set(alphabet) == set(['0', '1']):
-        base = 2
-        mapping = {c: int(c) for c in alphabet}
-    elif len(alphabet) == 2 and all(len(sym) == 1 for sym in alphabet):
-        base = 2
-        mapping = {alphabet[0]: 0, alphabet[1]: 1}
-    elif all(sym.isdigit() and len(sym) == 1 for sym in alphabet):
-        base = 10
-        mapping = {sym: int(sym) for sym in alphabet}
-    else:
-        raise ValueError("DIVISIBLE_BY: unsupported alphabet for numeric interpretation")
+def build_min_count_dfa(alphabet: List[str], target_symbol: str, min_count: int) -> Dict[str, Any]:
+    """
+    Build a DFA that accepts strings with at least min_count occurrences of target_symbol.
+    Uses states to track the count up to min_count, then stays in accepting state.
+    """
+    if min_count <= 0:
+        # If min count is 0 or less, accept all strings
+        states = ["q_accept"]
+        transitions = {"q_accept": {sym: "q_accept" for sym in alphabet}}
+        return {
+            "states": states,
+            "alphabet": alphabet,
+            "start_state": "q_accept",
+            "accept_states": ["q_accept"],
+            "transitions": transitions
+        }
+
+    # States: q0 (0 matches), q1 (1 match), ..., qN (N matches and beyond)
+    states = [f"q{i}" for i in range(min_count + 1)]
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
+
+    # For each state, define transitions
+    for i in range(min_count + 1):
+        for sym in alphabet:
+            if sym == target_symbol:
+                # If we match the target symbol
+                if i < min_count:
+                    # Move to next count state
+                    transitions[f"q{i}"][sym] = f"q{i+1}"
+                else:
+                    # Stay in the final state (have enough matches)
+                    transitions[f"q{i}"][sym] = f"q{min_count}"
+            else:
+                # If we don't match the target symbol
+                if i < min_count:
+                    # Stay in current state
+                    transitions[f"q{i}"][sym] = f"q{i}"
+                else:
+                    # Stay in final state
+                    transitions[f"q{i}"][sym] = f"q{min_count}"
+
+    # Accept states: all states from min_count onwards
+    accept_states = [f"q{i}" for i in range(min_count, min_count + 1)]
+
+    return {
+        "states": states,
+        "alphabet": alphabet,
+        "start_state": "q0",
+        "accept_states": accept_states,
+        "transitions": transitions
+    }
+
+
+def build_max_count_dfa(alphabet: List[str], target_symbol: str, max_count: int) -> Dict[str, Any]:
+    """
+    Build a DFA that accepts strings with at most max_count occurrences of target_symbol.
+    Uses states to track the count up to max_count, then goes to rejecting sink.
+    """
+    # States: q0 (0 matches), q1 (1 match), ..., qN (N matches), q_over (too many)
+    states = [f"q{i}" for i in range(max_count + 1)] + ["q_over"]
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
+
+    # For each counting state, define transitions
+    for i in range(max_count + 1):
+        for sym in alphabet:
+            if sym == target_symbol:
+                # If we match the target symbol
+                if i < max_count:
+                    # Move to next count state
+                    transitions[f"q{i}"][sym] = f"q{i+1}"
+                else:
+                    # Too many matches, go to rejecting state
+                    transitions[f"q{i}"][sym] = "q_over"
+            else:
+                # If we don't match the target symbol
+                if i <= max_count:
+                    # Stay in current state
+                    transitions[f"q{i}"][sym] = f"q{i}"
+
+    # Transition from overflow state
+    for sym in alphabet:
+        transitions["q_over"][sym] = "q_over"
+
+    # Accept states: all states up to max_count
+    accept_states = [f"q{i}" for i in range(max_count + 1)]
+
+    return {
+        "states": states,
+        "alphabet": alphabet,
+        "start_state": "q0",
+        "accept_states": accept_states,
+        "transitions": transitions
+    }
+
+
+def build_divisible_by_dfa(alphabet: List[str], k: int) -> Dict[str, Any]:
+    """
+    Build a DFA that accepts strings representing numbers divisible by k.
+    This function is now base-agnostic and works with any ordered alphabet.
+    """
+    # Determine base and mapping based on the alphabet
+    base = len(alphabet)
+    mapping = {sym: idx for idx, sym in enumerate(alphabet)}
+
+    # Validate that all symbols in alphabet are single characters for numeric interpretation
+    if not all(len(sym) == 1 for sym in alphabet):
+        raise ValueError("DIVISIBLE_BY: all alphabet symbols must be single characters for numeric interpretation")
 
     states = [f"r{r}" for r in range(k)]
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for r in range(k):
         for sym in alphabet:
             d = mapping.get(sym, 0)
@@ -383,18 +477,25 @@ def build_divisible_by_dfa(alphabet: List[str], k: int) -> Dict:
     return {"states": states, "alphabet": alphabet, "start_state": "r0", "accept_states": ["r0"], "transitions": transitions}
 
 
-def build_product_even_dfa(alphabet: List[str]) -> Dict:
+def build_product_even_dfa(alphabet: List[str]) -> Dict[str, Any]:
+    """
+    Build a DFA that accepts strings where the product of all symbols is even.
+    In numeric contexts, this means at least one even digit is present.
+    """
     even_symbols = set()
-    if set(alphabet) == set(['0', '1']):
-        even_symbols = {'0'}
-    elif len(alphabet) == 2 and all(len(sym) == 1 for sym in alphabet):
-        even_symbols = {alphabet[0]}
-    else:
-        for s in alphabet:
+    for s in alphabet:
+        # Check if symbol represents an even number
+        try:
             if s.isdigit() and int(s) % 2 == 0:
                 even_symbols.add(s)
+            elif len(s) == 1 and ord(s) % 2 == 0:  # For non-digit symbols, use ASCII value
+                even_symbols.add(s)
+        except ValueError:
+            # If not a digit, skip for even check
+            continue
+
     states = ['q0', 'q1']
-    transitions = {s: {} for s in states}
+    transitions: Dict[str, Dict[str, str]] = {s: {} for s in states}
     for sym in alphabet:
         transitions['q0'][sym] = 'q1' if sym in even_symbols else 'q0'
         transitions['q1'][sym] = 'q1'
@@ -411,6 +512,27 @@ class AnalystAgent(BaseAgent):
     def try_local_composite_parse(self, user_prompt: str) -> Optional[LogicSpec]:
         lp = user_prompt.strip()
         lower = lp.lower()
+
+        # Check for range queries first (special case)
+        range_match = re.search(r"(\w+)\s+of\s+(\w+)\s+between\s+(\d+)\s+and\s+(\d+)", lower)
+        if range_match:
+            quantifier, target, low, high = range_match.groups()
+            if quantifier in ["count", "number"]:
+                # This is a range query: "count of X between A and B"
+                # Interpret as: count(X) >= A AND count(X) <= B
+                low_int, high_int = int(low), int(high)
+
+                # Create two atomic specs: count >= low AND count <= high
+                spec1 = LogicSpec(logic_type="MIN_COUNT", target=f"{target}:{low_int}", alphabet=["0", "1"])
+                spec2 = LogicSpec(logic_type="MAX_COUNT", target=f"{target}:{high_int}", alphabet=["0", "1"])
+
+                child_dicts = [spec1.model_dump(), spec2.model_dump()]
+                composite = {"logic_type": "AND", "target": None, "children": child_dicts}
+                spec = LogicSpec(**composite)
+                unify_alphabets_for_spec(spec)
+                return spec
+
+        # Check for standard composite operations
         op = None
         sep = None
         if " and " in lower:
@@ -441,7 +563,7 @@ class AnalystAgent(BaseAgent):
             else:
                 return None
 
-        child_dicts = [c.model_dump() if hasattr(c, "model_dump") else c.__dict__ for c in child_specs]
+        child_dicts: List[Dict[str, Any]] = [c.model_dump() if hasattr(c, "model_dump") else c.__dict__ for c in child_specs]
         composite = {"logic_type": op, "target": None, "children": child_dicts}
         spec = LogicSpec(**composite)
         unify_alphabets_for_spec(spec)
@@ -494,10 +616,16 @@ class ArchitectAgent(BaseAgent):
     def __init__(self, model_name: str, max_product_states: int = 2000):
         super().__init__(model_name)
         self.max_product_states = max_product_states
+        # Initialize persistent cache
+        import os
+        cache_dir = os.path.join(os.path.dirname(__file__), '..', '..', '.cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        self.cache = dc.Cache(directory=cache_dir)
+
         # product_engine and repair_engine are expected to be available in your repo
         # If you have ProductConstructionEngine import it; here we assume product_engine has combine/invert
         try:
-            from core.product import ProductConstructionEngine
+            from .product import ProductConstructionEngine
             self.product_engine = ProductConstructionEngine()
         except Exception:
             # Define a minimal placeholder that raises if used
@@ -517,22 +645,164 @@ class ArchitectAgent(BaseAgent):
             for child in spec.children:
                 self._propagate_alphabet_down(child, alphabet)
 
+    def _get_atomic_spec_hash(self, logic_type: str, target: str, alphabet_tuple: tuple) -> str:
+        """
+        Generate a hash for atomic operation parameters.
+        """
+        import hashlib
+        params_tuple = (logic_type, target, alphabet_tuple)
+        return hashlib.md5(str(params_tuple).encode()).hexdigest()
+
+    def _get_cached_atomic_dfa(self, logic_type: str, target: str, alphabet_tuple: tuple) -> Optional[tuple]:
+        """
+        Retrieve cached atomic DFA from persistent cache.
+        """
+        cache_key = self._get_atomic_spec_hash(logic_type, target, alphabet_tuple)
+        try:
+            return self.cache.get(cache_key)
+        except:
+            return None
+
+    def _set_cached_atomic_dfa(self, logic_type: str, target: str, alphabet_tuple: tuple, dfa_tuple: tuple) -> None:
+        """
+        Store atomic DFA in persistent cache.
+        """
+        cache_key = self._get_atomic_spec_hash(logic_type, target, alphabet_tuple)
+        try:
+            self.cache.set(cache_key, dfa_tuple, expire=3600*24*30)  # Expire in 30 days
+        except:
+            pass  # Silently fail if caching fails
+
+    def _build_atomic_dfa(self, logic_type: str, target: str, alphabet: List[str]) -> Optional[tuple]:
+        """
+        Build atomic DFA and cache it persistently.
+        """
+        t = target or ""
+
+        try:
+            if logic_type == "STARTS_WITH":
+                d = build_starts_with_dfa(alphabet, t)
+                return tuple(d.items())  # Convert dict to hashable tuple
+            if logic_type == "CONTAINS":
+                d = build_substring_dfa(alphabet, t)
+                return tuple(d.items())
+            if logic_type == "ENDS_WITH":
+                d = build_substring_dfa(alphabet, t, match_at_end_only=True)
+                return tuple(d.items())
+            if logic_type == "NO_CONSECUTIVE":
+                d = build_no_consecutive_dfa(alphabet, t)
+                return tuple(d.items())
+            if logic_type == "EXACT_LENGTH":
+                d = build_exact_length_dfa(alphabet, int(t))
+                return tuple(d.items())
+            if logic_type == "MIN_LENGTH":
+                d = build_min_length_dfa(alphabet, int(t))
+                return tuple(d.items())
+            if logic_type == "MAX_LENGTH":
+                d = build_max_length_dfa(alphabet, int(t))
+                return tuple(d.items())
+            if logic_type == "LENGTH_MOD":
+                r_str, k_str = t.split(":")
+                k = int(k_str); r = int(r_str)
+                d = build_length_mod_k_dfa(alphabet, k, r)
+                return tuple(d.items())
+            if logic_type == "COUNT_MOD":
+                # t expected "symbol:r:k"
+                sym, r_str, k_str = t.split(":")
+                d = build_count_mod_k_dfa(alphabet, sym, int(k_str), int(r_str))
+                return tuple(d.items())
+            if logic_type == "DIVISIBLE_BY":
+                d = build_divisible_by_dfa(alphabet, int(t))
+                return tuple(d.items())
+            if logic_type == "PRODUCT_EVEN":
+                d = build_product_even_dfa(alphabet)
+                return tuple(d.items())
+
+            # Parity counting: EVEN_COUNT / ODD_COUNT
+            if logic_type in ["EVEN_COUNT", "ODD_COUNT"]:
+                # Use count_mod_k with k=2, r=0 for EVEN, r=1 for ODD
+                r = 0 if logic_type == "EVEN_COUNT" else 1
+                t_val = t or "1"  # Default target if not provided
+                d = build_count_mod_k_dfa(alphabet, t_val, k=2, r=r)
+                return tuple(d.items())
+
+            # Count-based operations: MIN_COUNT and MAX_COUNT
+            if logic_type == "MIN_COUNT":
+                # t expected "symbol:count"
+                if ":" in t:
+                    symbol, count_str = t.split(":")
+                    count = int(count_str)
+                    d = build_min_count_dfa(alphabet, symbol, count)
+                    return tuple(d.items())
+            if logic_type == "MAX_COUNT":
+                # t expected "symbol:count"
+                if ":" in t:
+                    symbol, count_str = t.split(":")
+                    count = int(count_str)
+                    d = build_max_count_dfa(alphabet, symbol, count)
+                    return tuple(d.items())
+
+            # NOT operations that have their own builders
+            if logic_type == "NOT_STARTS_WITH":
+                starts_dfa_dict = build_starts_with_dfa(alphabet, t)
+                starts_dfa = DFA(**starts_dfa_dict)
+                inverted_dfa = self.product_engine.invert(starts_dfa)
+                return tuple(inverted_dfa.model_dump().items())
+            if logic_type == "NOT_ENDS_WITH":
+                ends_dfa_dict = build_substring_dfa(alphabet, t, match_at_end_only=True)
+                ends_dfa = DFA(**ends_dfa_dict)
+                inverted_dfa = self.product_engine.invert(ends_dfa)
+                return tuple(inverted_dfa.model_dump().items())
+            if logic_type == "NOT_CONTAINS":
+                contains_dfa_dict = build_substring_dfa(alphabet, t)
+                contains_dfa = DFA(**contains_dfa_dict)
+                inverted_dfa = self.product_engine.invert(contains_dfa)
+                return tuple(inverted_dfa.model_dump().items())
+
+        except Exception as e:
+            logger.warning(f"[Architect] Atomic builder failed for {logic_type} {t}: {e}")
+            # Return a default rejecting DFA as tuple
+            states = ("q0",)
+            alphabet_tuple = tuple(alphabet)
+            transitions = (("q0", {sym: "q0" for sym in alphabet}),)
+            start_state = "q0"
+            accept_states = ()
+            return ("states", states), ("alphabet", alphabet_tuple), ("transitions", transitions), ("start_state", start_state), ("accept_states", accept_states)
+
+        # Fallback: no matching logic type
+        return None
+
+
     def design(self, spec: LogicSpec) -> DFA:
         """
         Design a DFA from a LogicSpec. Handles composite (AND/OR/NOT) and atomic specs.
-        
+        Uses LRU caching to avoid recomputing the same atomic DFA multiple times.
+
         CRITICAL: For composite operations, the unified alphabet is propagated DOWN
         to all children BEFORE building them. This prevents alphabet mismatch errors.
         """
-        # Composite handling
+        # For atomic operations, try to use the cache
+        if not spec.children and spec.logic_type not in ["AND", "OR", "NOT"]:  # Atomic operation
+            try:
+                # Convert to hashable types for caching
+                result_tuple = self._build_atomic_dfa(spec.logic_type, spec.target or "", list(spec.alphabet))
+                # Convert back to dict for DFA construction
+                if result_tuple is not None:
+                    result_dict = dict(result_tuple)
+                    return DFA(**result_dict)
+            except Exception as e:
+                logger.info(f"[Architect] Cache miss or error for {spec.logic_type}, computing normally: {e}")
+                # If cache fails, continue with normal computation
+
+        # Composite handling (unchanged from original)
         if spec.logic_type == "NOT":
             if not spec.children:
                 raise ValueError("'NOT' node missing children")
-            
+
             # CRITICAL: Propagate parent's alphabet to child before building
             full_alphabet = spec.alphabet or ['0', '1']
             self._propagate_alphabet_down(spec.children[0], full_alphabet)
-            
+
             child_dfa = self.design(spec.children[0])
             return self.product_engine.invert(child_dfa)
 
@@ -540,46 +810,46 @@ class ArchitectAgent(BaseAgent):
             # CRITICAL FIX: Propagate unified alphabet DOWN to all children FIRST
             # This ensures all partial DFAs speak the same language (e.g., {a, b, 0, 1})
             full_alphabet = spec.alphabet or ['0', '1']
-            
+
             # Force all direct children to inherit the unified alphabet
             for child in spec.children:
                 self._propagate_alphabet_down(child, full_alphabet)
-            
+
             # Flatten children (LogicSpec objects)
             flat = flatten_children(spec)
             if not flat:
                 flat = spec.children
-            
+
             # Re-apply alphabet to flattened children (in case flattening pulled in new children)
             for c in flat:
                 self._propagate_alphabet_down(c, full_alphabet)
-            
+
             # Estimate growth
             estimated = 1
             for c in flat:
                 estimated *= max(1, estimate_states_for_spec(c))
                 if estimated > self.max_product_states:
                     raise ValueError(f"Product size estimate too large: {estimated} states (threshold={self.max_product_states})")
-            
+
             # Build DFAs for children
             child_dfas = []
             for c in flat:
                 dfa = self.design(c)
                 child_dfas.append((c, dfa))
-            
+
             # Sort by size to combine small first (optimization)
             child_dfas.sort(key=lambda pair: len(pair[1].states))
             current = child_dfas[0][1]
-            
+
             for _, nxt in child_dfas[1:]:
                 inter_est = len(current.states) * len(nxt.states)
                 if inter_est > self.max_product_states:
                     raise ValueError(f"Intermediate product would exceed safe size ({inter_est} > {self.max_product_states}).")
                 current = self.product_engine.combine(current, nxt, spec.logic_type)
-            
+
             return current
 
-        # Atomic cases: build deterministic DFAs for common types
+        # Atomic cases: build deterministic DFAs for common types (non-cached fallback)
         lt = spec.logic_type
         a = spec.alphabet or ['0', '1']
         t = spec.target or ""
@@ -595,8 +865,10 @@ class ArchitectAgent(BaseAgent):
                 d = build_substring_dfa(a, t, match_at_end_only=True)
                 return DFA(**d)
             if lt == "NOT_CONTAINS":
-                d = build_not_contains_dfa(a, t)
-                return DFA(**d)
+                # Build CONTAINS DFA then invert via product engine (includes complete_dfa)
+                contains_dfa_dict = build_substring_dfa(a, t)
+                contains_dfa = DFA(**contains_dfa_dict)
+                return self.product_engine.invert(contains_dfa)
             if lt == "NO_CONSECUTIVE":
                 d = build_no_consecutive_dfa(a, t)
                 return DFA(**d)
@@ -625,33 +897,45 @@ class ArchitectAgent(BaseAgent):
             if lt == "PRODUCT_EVEN":
                 d = build_product_even_dfa(a)
                 return DFA(**d)
-            
+
             # Parity counting: EVEN_COUNT / ODD_COUNT
             if lt in ["EVEN_COUNT", "ODD_COUNT"]:
                 # Use count_mod_k with k=2, r=0 for EVEN, r=1 for ODD
                 r = 0 if lt == "EVEN_COUNT" else 1
                 d = build_count_mod_k_dfa(a, t, k=2, r=r)
                 return DFA(**d)
-            
-            # NOT_STARTS_WITH: invert the STARTS_WITH DFA
+
+            # NOT_STARTS_WITH: build STARTS_WITH then invert via product engine
             if lt == "NOT_STARTS_WITH":
                 starts_dfa_dict = build_starts_with_dfa(a, t)
-                # Invert accept states
-                all_states = starts_dfa_dict["states"]
-                accept_states = starts_dfa_dict["accept_states"]
-                inverted_accept = [s for s in all_states if s not in accept_states]
-                starts_dfa_dict["accept_states"] = inverted_accept
-                return DFA(**starts_dfa_dict)
-            
-            # NOT_ENDS_WITH: invert the ENDS_WITH DFA
+                starts_dfa = DFA(**starts_dfa_dict)
+                # Use product engine invert which includes complete_dfa()
+                return self.product_engine.invert(starts_dfa)
+
+            # NOT_ENDS_WITH: build ENDS_WITH then invert via product engine
             if lt == "NOT_ENDS_WITH":
                 ends_dfa_dict = build_substring_dfa(a, t, match_at_end_only=True)
-                # Invert accept states
-                all_states = ends_dfa_dict["states"]
-                accept_states = ends_dfa_dict["accept_states"]
-                inverted_accept = [s for s in all_states if s not in accept_states]
-                ends_dfa_dict["accept_states"] = inverted_accept
-                return DFA(**ends_dfa_dict)
+                ends_dfa = DFA(**ends_dfa_dict)
+                # Use product engine invert which includes complete_dfa()
+                return self.product_engine.invert(ends_dfa)
+
+            # Count-based operations: MIN_COUNT and MAX_COUNT
+            if lt == "MIN_COUNT":
+                # t expected "symbol:count"
+                if ":" in t:
+                    symbol, count_str = t.split(":")
+                    count = int(count_str)
+                    # Build a DFA that counts occurrences of the symbol
+                    d = build_min_count_dfa(a, symbol, count)
+                    return DFA(**d)
+            if lt == "MAX_COUNT":
+                # t expected "symbol:count"
+                if ":" in t:
+                    symbol, count_str = t.split(":")
+                    count = int(count_str)
+                    # Build a DFA that counts occurrences of the symbol
+                    d = build_max_count_dfa(a, symbol, count)
+                    return DFA(**d)
         except Exception as e:
             logger.warning(f"[Architect] Atomic builder failed for {lt} {t}: {e}")
 
