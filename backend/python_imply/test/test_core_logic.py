@@ -90,7 +90,10 @@ def test_length_mod():
 def test_count_mod_and_even_odd_counts():
     assert check("COUNT_MOD", "1:1:2", "101", alphabet=["0","1"]) is True
     assert check("EVEN_COUNT", "1", "11", alphabet=["0","1"]) is True
-    assert check("ODD_COUNT", "1", "101", alphabet=["0","1"]) is True
+    # '101' has 2 ones (even), so ODD_COUNT should be False
+    assert check("ODD_COUNT", "1", "101", alphabet=["0","1"]) is False
+    # Verify ODD_COUNT works correctly with odd count strings
+    assert check("ODD_COUNT", "1", "111", alphabet=["0","1"]) is True
 
 # Divisibility tests
 def test_divisible_by_3_binary():

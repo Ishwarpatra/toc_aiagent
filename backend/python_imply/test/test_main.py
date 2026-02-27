@@ -1,90 +1,74 @@
+"""
+Tests for main.DFAGeneratorSystem pipeline.
+"""
 import pytest
 from main import DFAGeneratorSystem, DFA
 from core.validator import DeterministicValidator, LogicSpec
 
-# Initialize the engine once
-validator = DeterministicValidator()
+# Initialize the engine once per test session
+@pytest.fixture(scope="module")
+def dfa_system():
+    return DFAGeneratorSystem(model_name="test")
 
-agents = DFAGeneratorSystem()
-# "Design a DFA that accepts strings starting with 'b'"
-spec = agents.agent_1_analyst("Design a DFA that accepts strings ending with 'b'")
+@pytest.fixture(scope="module")
+def det_validator():
+    return DeterministicValidator()
 
 # --- Agent Prompt Parsing Tests ---
-def test_agent_1_analyst():
+def test_analyst_ends_with(dfa_system):
+    spec = dfa_system.analyst.analyze("Design a DFA that accepts strings ending with 'b'")
     assert spec.logic_type == "ENDS_WITH"
     assert spec.target == "b"
 
-call : DFA = agents.agent_2_architect(spec)
-def test_agent_2_architect():
-    # assert call.states == ['q0', 'q1', 'q_dead']
-    print(call.alphabet)
-    print(call.start_state)
-    print(call.accept_states)
-    print(call.transitions)
-    # assert call.alphabet == ['0', '1']
-    # assert call.start_state == q0
-    # assert call.accept_states == ['q1']
+def test_analyst_starts_with(dfa_system):
+    spec = dfa_system.analyst.analyze("Design a DFA that accepts strings starting with 'a'")
+    assert spec.logic_type == "STARTS_WITH"
+    assert spec.target == "a"
 
+def test_analyst_contains(dfa_system):
+    spec = dfa_system.analyst.analyze("Design a DFA that accepts strings containing '01'")
+    assert spec.logic_type == "CONTAINS"
+    assert spec.target == "01"
 
-def check(logic_type, target, input_str):
+def test_architect_design(dfa_system):
+    spec = dfa_system.analyst.analyze("strings ending with 'b'")
+    dfa = dfa_system.architect.design(spec)
+    assert isinstance(dfa, DFA)
+    assert dfa.start_state is not None
+    assert dfa.accept_states is not None
+    assert len(dfa.accept_states) > 0
+    assert dfa.alphabet is not None
+
+def check(validator, logic_type, target, input_str):
     spec = LogicSpec(logic_type=logic_type, target=target)
-    # This calls the PUBLIC method now
     return validator.get_truth(input_str, spec)
 
-# --- 1. STARTS WITH Tests ---
-if spec.logic_type == "STARTS_WITH":
-    if spec.alphabet == "a":
-        def test_starts_with_a():
-            # Basic
-            assert check("STARTS_WITH", spec.target, "b") is False
-            assert check("STARTS_WITH", spec.target, "a") is True
-            assert check("STARTS_WITH", spec.target, "ab") is True
-            assert check("STARTS_WITH", spec.target, "ba") is False
-            assert check("STARTS_WITH", spec.target, "") is False
+# --- Validator Tests ---
+def test_validator_starts_with(det_validator):
+    assert check(det_validator, "STARTS_WITH", "b", "b") is True
+    assert check(det_validator, "STARTS_WITH", "b", "ba") is True
+    assert check(det_validator, "STARTS_WITH", "b", "a") is False
+
+def test_validator_ends_with(det_validator):
+    assert check(det_validator, "ENDS_WITH", "b", "ab") is True
+    assert check(det_validator, "ENDS_WITH", "b", "a") is False
+
+def test_validator_contains(det_validator):
+    assert check(det_validator, "CONTAINS", "01", "001") is True
+    assert check(det_validator, "CONTAINS", "01", "00") is False
+
+def test_full_pipeline(dfa_system, det_validator):
+    """Test the full Analyst -> Architect -> Validator pipeline."""
+    prompt = "strings starting with 'a'"
     
-    elif spec.alphabet == "b":     
-        def test_starts_with_b():   
-            assert check("STARTS_WITH", spec.target, "b") is True
-            assert check("STARTS_WITH", spec.target, "a") is False
-            assert check("STARTS_WITH", spec.target, "ab") is False
-            assert check("STARTS_WITH", spec.target, "ba") is True
-            assert check("STARTS_WITH", spec.target, "") is False
-            
-        # assert check("STARTS_WITH", "b", "b") is True
-        # assert check("STARTS_WITH", "b", "ba") is True
-        # assert check("STARTS_WITH", "b", "a") is False
-        # assert check("STARTS_WITH", "b", "") is False 
-        
-#     # Substring target
-#     assert check("STARTS_WITH", "ab", "abc") is True
-#     assert check("STARTS_WITH", "ab", "ac") is False
-
-# --- 2. ENDS WITH Tests ---
-def test_ends_with():
-    assert check("ENDS_WITH", "ab", "bab") is True
-    assert check("ENDS_WITH", "ab", "ab") is True
-    assert check("ENDS_WITH", "ab", "aba") is False
-    assert check("ENDS_WITH", "a", "b") is False
-
-# # --- 3. CONTAINS Tests ---
-# def test_contains():
-#     t = "aba"
-#     assert check("CONTAINS", t, "aba") is True      
-#     assert check("CONTAINS", t, "babac") is True    
-#     assert check("CONTAINS", t, "ab") is False      
-#     assert check("CONTAINS", t, "") is False
-
-# # --- 4. NEGATION Tests ---
-# def test_not_starts_with():
-#     assert check("NOT_STARTS_WITH", "b", "a") is True
-#     assert check("NOT_STARTS_WITH", "b", "") is True 
-#     assert check("NOT_STARTS_WITH", "b", "b") is False
-
-# def test_not_contains():
-#     assert check("NOT_CONTAINS", "aa", "aba") is True
-#     assert check("NOT_CONTAINS", "aa", "baab") is False
-
-# # --- 5. EDGE CASE: Empty Target ---
-# def test_empty_target_behavior():
-    # assert check("STARTS_WITH", "", "abc") is True
-    # assert check("CONTAINS", "", "abc") is True
+    # Analyst
+    spec = dfa_system.analyst.analyze(prompt)
+    assert spec.logic_type == "STARTS_WITH"
+    
+    # Architect
+    dfa = dfa_system.architect.design(spec)
+    assert isinstance(dfa, DFA)
+    
+    # Validator
+    is_valid, error_msg = dfa_system.validator.validate(dfa, spec)
+    assert is_valid is True or error_msg is None

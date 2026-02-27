@@ -1,13 +1,10 @@
 import sys
 import os
 
-# Ensure repository backend root and python_imply package are on sys.path
+# Ensure python_imply package is on sys.path
+# Only add PYTHON_IMPLY - do NOT add BACKEND_ROOT to avoid package collision
 HERE = os.path.dirname(__file__)
 PYTHON_IMPLY = os.path.abspath(os.path.join(HERE, ".."))
-BACKEND_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-
-if BACKEND_ROOT not in sys.path:
-    sys.path.insert(0, BACKEND_ROOT)
 
 if PYTHON_IMPLY not in sys.path:
     sys.path.insert(0, PYTHON_IMPLY)

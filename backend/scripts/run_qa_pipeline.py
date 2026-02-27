@@ -174,12 +174,12 @@ def print_category_report(stats: dict) -> None:
     for cat, counts in sorted(stats["categories"].items()):
         total = counts["pass"] + counts["fail"] + counts["oracle_fail"] + counts["error"]
         rate = counts["pass"] / total * 100 if total > 0 else 0
-        
-        icon = "✓" if counts["fail"] == 0 and counts["oracle_fail"] == 0 and counts["error"] == 0 else "✗"
-        print(f"  {icon} {cat:<28} {counts['pass']}/{total} ({rate:.0f}%)")
-        
+
+        icon = "OK" if counts["fail"] == 0 and counts["oracle_fail"] == 0 and counts["error"] == 0 else "FAIL"
+        print(f"  [{icon}] {cat:<28} {counts['pass']}/{total} ({rate:.0f}%)")
+
         if counts["oracle_fail"] > 0:
-            print(f"      └── Oracle failures: {counts['oracle_fail']}")
+            print(f"      +-- Oracle failures: {counts['oracle_fail']}")
 
 
 def main():

@@ -6,7 +6,7 @@ from main import DFAGeneratorSystem
 from core.validator import DeterministicValidator
 from core.agents import AnalystAgent, ArchitectAgent, BaseAgent 
 
-base = BaseAgent()
+base = BaseAgent(model_name="test")
 agent = AnalystAgent(base)
 
 def test_prompt1():
@@ -172,13 +172,13 @@ def test_architect_starts_with_0():
     spec = agent.analyze("Design a DFA that accepts strings starting with '0'")
 
     fake_response = json.dumps({
-        "states": ["q0", "q1", "q2"],
+        "states": ["q0", "q1", "q_dead"],
         "start_state": "q0",
         "accept_states": ["q1"],
         "transitions": {
-            "q0": {"0": "q1", "1": "q2"},
+            "q0": {"0": "q1", "1": "q_dead"},
             "q1": {"0": "q1", "1": "q1"},
-            "q2": {"0": "q2", "1": "q2"}
+            "q_dead": {"0": "q_dead", "1": "q_dead"}
         }
     })
 
@@ -188,7 +188,7 @@ def test_architect_starts_with_0():
         assert dfa.start_state == "q0"
         assert dfa.accept_states == ["q1"]
         assert dfa.transitions["q0"]["0"] == "q1"
-        assert dfa.transitions["q0"]["1"] == "q2"
+        assert dfa.transitions["q0"]["1"] == "q_dead"
 
         print(dfa.transitions)
 

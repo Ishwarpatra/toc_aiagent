@@ -673,6 +673,28 @@ class ArchitectAgent(BaseAgent):
         except:
             pass  # Silently fail if caching fails
 
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics for monitoring and debugging.
+        Returns hit/miss counts and total cached entries.
+        """
+        try:
+            # diskcache doesn't have direct hit/miss tracking like lru_cache
+            # but we can get total entries and size
+            total_entries = len(self.cache)
+            total_size = self.cache.volume()
+            return {
+                "total_entries": total_entries,
+                "total_size_bytes": total_size,
+                "cache_directory": self.cache.directory,
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "total_entries": 0,
+                "total_size_bytes": 0,
+            }
+
     def _build_atomic_dfa(self, logic_type: str, target: str, alphabet: List[str]) -> Optional[tuple]:
         """
         Build atomic DFA and cache it persistently.
@@ -769,8 +791,9 @@ class ArchitectAgent(BaseAgent):
             accept_states = ()
             return ("states", states), ("alphabet", alphabet_tuple), ("transitions", transitions), ("start_state", start_state), ("accept_states", accept_states)
 
-        # Fallback: no matching logic type
-        return None
+        # CRITICAL: Strict else block - never silently return None
+        # A caching layer must never return None on cache miss for unsupported keys
+        raise ValueError(f"Unsupported atomic logic type for cache: {logic_type} (target: {t})")
 
 
     def design(self, spec: LogicSpec) -> DFA:
