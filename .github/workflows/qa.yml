@@ -1,0 +1,178 @@
+name: DFA Logic QA Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/qa.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      test_count:
+        description: 'Number of tests to run'
+        required: false
+        default: '50'
+
+jobs:
+  # ==========================================================================
+  # Unit Tests - Fast feedback on core DFA logic
+  # ==========================================================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd backend/python_imply
+          pip install -r requirements-dev.txt
+      
+      - name: Run unit tests with coverage
+        run: |
+          cd backend/python_imply
+          python -m pytest test/ -v --tb=short --cov=core --cov=. --cov-report=term-missing
+  
+  # ==========================================================================
+  # Oracle QA Pipeline - Black Box testing with ground truth validation
+  # ==========================================================================
+  oracle-qa:
+    name: Oracle QA Pipeline
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    env:
+      TEST_COUNT: ${{ github.event.inputs.test_count || '50' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+      
+      - name: Install Python dependencies
+        run: |
+          cd backend/python_imply
+          pip install -r requirements.txt
+      
+      - name: Generate test cases
+        run: |
+          cd backend/scripts
+          python generate_tests.py --output qa_tests.csv --count $TEST_COUNT
+      
+      - name: Run QA Pipeline
+        id: qa
+        run: |
+          cd backend/scripts
+          python batch_verify.py \
+            --input qa_tests.csv \
+            --output qa_results.csv \
+            --save-failures \
+            --no-color \
+            2>&1 | tee qa_output.log
+        continue-on-error: true
+      
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-results
+          path: |
+            backend/scripts/qa_tests.csv
+            backend/scripts/qa_results.csv
+            backend/scripts/qa_output.log
+            backend/scripts/failed_prompts_bank.csv
+          retention-days: 30
+      
+      - name: Check QA results
+        run: |
+          if [ -f backend/scripts/qa_results.csv ]; then
+            echo "=== QA Results Summary ==="
+            head -20 backend/scripts/qa_results.csv
+            
+            # Count results
+            TOTAL=$(tail -n +2 backend/scripts/qa_results.csv | wc -l)
+            PASSED=$(grep -c ",PASS," backend/scripts/qa_results.csv || echo 0)
+            FAILED=$(grep -c ",FAIL," backend/scripts/qa_results.csv || echo 0)
+            ORACLE_FAILED=$(grep -c ",ORACLE_FAIL," backend/scripts/qa_results.csv || echo 0)
+            
+            echo ""
+            echo "Total: $TOTAL"
+            echo "Passed: $PASSED"
+            echo "Failed (Internal): $FAILED"
+            echo "Failed (Oracle): $ORACLE_FAILED"
+            
+            if [ "$ORACLE_FAILED" -gt 0 ]; then
+              echo ""
+              echo "⚠️ ORACLE FAILURES DETECTED - Analyst may be misinterpreting prompts!"
+              echo "Check failed_prompts_bank.csv for details."
+            fi
+          fi
+      
+      - name: Fail if tests failed
+        if: steps.qa.outcome == 'failure'
+        run: |
+          echo "❌ QA Pipeline failed. Check artifacts for details."
+          exit 1
+  
+  # ==========================================================================
+  # Extended QA - Full test suite (only on main branch)
+  # ==========================================================================
+  extended-qa:
+    name: Extended QA (Full Suite)
+    runs-on: ubuntu-latest
+    needs: oracle-qa
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          cd backend/python_imply
+          pip install -r requirements.txt
+      
+      - name: Run Extended QA Pipeline
+        run: |
+          cd backend/scripts
+          python run_qa_pipeline.py --count 500
+        continue-on-error: true
+      
+      - name: Upload extended results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extended-qa-results
+          path: backend/scripts/qa_output/
+          retention-days: 30
