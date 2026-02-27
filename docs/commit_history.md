@@ -174,6 +174,117 @@ Summary:
 
 ---
 
+Commit: fix(core): standardize relative imports and add type annotations
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Changed `from core.models` to `from .models` in `validator.py` and `agents.py` for consistent relative imports within `core/` package.
+- Changed `from core.product` to `from .product` in `agents.py`.
+- Added `Dict[str, Any]` return types to all `build_*` DFA builder functions.
+- Annotated all `transitions` dict comprehensions as `Dict[str, Dict[str, str]]`.
+- Fixed undefined `_cached_design_atomic` → replaced with `_build_atomic_dfa`.
+- Added fallback `return None` to `_build_atomic_dfa` for unmatched logic types.
+- Added `Any` to `typing` imports.
+
+---
+
+Commit: feat(api): add input sanitization, rate limiting, and API key auth
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Input sanitization: max 500 chars, whitespace stripping, control char rejection via Pydantic validators.
+- Rate limiting via `slowapi`: 10 req/min on `/generate`, 60 req/min on `/health`.
+- Optional API key authentication via `X-API-Key` header (controlled by `API_KEY` env var).
+- Structured logging with request IDs and per-phase timing in `/generate` responses.
+- Added `/export/json` and `/export/dot` endpoints for DFA downloads.
+- Added `diskcache` and `pyyaml` to `requirements.txt`.
+
+---
+
+Commit: feat(main): add LLM retry with exponential backoff
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Retry `analyst.analyze` and `architect.design` up to 3x with 1s/2s/4s exponential backoff.
+- Return structured error response when all LLM retries are exhausted.
+- Added per-phase timing for analysis, architecture, validation, and repair stages.
+
+---
+
+Commit: feat(frontend): add ErrorBoundary, accessibility, and fix SVG title
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Added `ErrorBoundary` component wrapping Canvas for graceful React error handling.
+- Canvas: added ARIA attributes (`role="img"`, `aria-label`, keyboard zoom `+`/`-`/`0`).
+- Canvas: fixed critical bug where SVG `<title>` was overwritten by `innerHTML` in `renderDFA`. Moved `<title>` into the `svgContent` string.
+- App: wrapped Canvas with ErrorBoundary.
+
+---
+
+Commit: test: add comprehensive API test suite and CI pipeline
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- `test_api.py`: comprehensive tests for health, input validation, auth, and generation.
+- `requirements-dev.txt`: pytest, pytest-cov, httpx, ruff, mypy dev dependencies.
+- `.github/workflows/qa.yml`: CI workflow running unit tests with coverage reporting.
+- Moved `test_functionality.py` and `test_persistent_cache.py` into `test/` directory.
+
+---
+
+Commit: infra: add Docker configs and environment files
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- `docker-compose.yml`: full-stack orchestration (backend + frontend + ollama).
+- Backend `Dockerfile` and `.dockerignore`.
+- Frontend `Dockerfile` with `nginx.conf` for production serving.
+- Frontend `.env` files for dev/prod/example environment configurations.
+
+---
+
+Commit: feat(scripts): add QA pipeline, test generation, and git hooks
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- `batch_verify.py`: batch DFA verification with oracle-based ground truth.
+- `generate_tests.py`: automated test case generator (6000+ test cases).
+- `run_qa_pipeline.py`: full QA orchestration script.
+- `retrain_analyst.py`: analyst model retraining utility.
+- `show_results.py`: results display helper.
+- `multiprocess_utils.py`: parallel execution utilities.
+- Pre-commit hooks (bash + PowerShell) for automated smoke tests.
+- `config/patterns.yaml` and `patterns.json` for pattern definitions.
+- `data/` directory with CSV test datasets.
+
+---
+
+Commit: feat(core): add normalizer and oracle modules
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- `normalizer.py`: prompt normalization for consistent parsing (YAML-based synonym mapping).
+- `oracle.py`: test oracle for black-box DFA validation against ground truth.
+- Archived old Java implementation to `_archive/` directory.
+
+---
+
+Commit: refactor: reorganize project directory structure
+Author: Ishwarpatra
+Date: 2026-02-27
+Summary:
+- Moved all documentation to `docs/`: architecture.md (renamed from dfa.md), DEPLOYMENT.md, TESTING.md, CONTRIBUTING.md, CHANGELOG.md, commit_history.md (renamed from commit.md).
+- Moved root-level scripts to `scripts/`: debug_parsing.py, test_correctness.py, install-hooks.ps1.
+- Renamed `dfa_result` → `scripts/sample_output.dot` (added proper .dot extension).
+- Organized `backend/scripts/` into `data/`, `debug/`, `output/` subdirectories.
+- Updated `.gitignore` for new paths, large data files, and cache directories.
+- Updated `README.md` with full project structure tree and enriched module table.
+- Created `docs/README.md` as documentation index.
+- Updated `sys.path` in moved scripts to reflect new relative locations.
+
+---
+
 Notes
 - This file is a curated activity log; additional small commits and refactors exist in the repository history that are not listed here for brevity.
 - If you'd like, I can expand each entry with explicit file lists and diff summaries, or convert this into a full chronological git-style changelog with commit SHAs.
