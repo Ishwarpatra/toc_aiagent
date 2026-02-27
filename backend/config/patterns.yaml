@@ -1,0 +1,170 @@
+# Configuration file for Auto-DFA patterns and synonyms
+# This separates configuration from code as per the roadmap
+
+# Synonyms for different operation types
+synonyms:
+  STARTS_WITH:
+    - "starts with"
+    - "begins with"
+    - "has prefix"
+    - "left-anchored by"
+    - "initiates with"
+    - "starts"
+    - "begins"
+    - "has the prefix"
+    - "prefixed by"
+  
+  ENDS_WITH:
+    - "ends with"
+    - "has suffix"
+    - "right-anchored by"
+    - "terminates with"
+    - "ends"
+    - "has the suffix"
+    - "suffixed by"
+    
+  CONTAINS:
+    - "contains"
+    - "containing"
+    - "has substring"
+    - "includes"
+    - "has the substring"
+    - "with the substring"
+    - "includes the substring"
+    - "has"
+    
+  NOT_CONTAINS:
+    - "not contains"
+    - "does not contain"
+    - "without"
+    - "doesn't contain"
+    - "free of"
+    - "not containing"
+    - "excluding"
+    - "not have"
+    
+  NOT_STARTS_WITH:
+    - "does not start with"
+    - "not starts with"
+    - "doesn't start with"
+    - "not beginning with"
+    - "not prefixed by"
+    - "not having prefix"
+    
+  NOT_ENDS_WITH:
+    - "does not end with"
+    - "not ends with"
+    - "doesn't end with"
+    - "not terminating with"
+    - "not suffixed by"
+    - "not having suffix"
+    
+  EXACT_LENGTH:
+    - "length is"
+    - "length ="
+    - "exactly"
+    - "has length"
+    - "with length"
+    - "of length"
+    - "length of"
+    - "exactly length"
+    
+  MIN_LENGTH:
+    - "at least"
+    - "minimum of"
+    - "no less than"
+    - "minimum length"
+    - "at minimum"
+    - "greater than or equal to length"
+    - "min length"
+    - "at least length"
+    
+  MAX_LENGTH:
+    - "at most"
+    - "maximum of"
+    - "no more than"
+    - "maximum length"
+    - "at maximum"
+    - "less than or equal to length"
+    - "max length"
+    - "at most length"
+    
+  DIVISIBLE_BY:
+    - "divisible by"
+    - "multiple of"
+    - "divides"
+    - "divisible"
+    - "evenly divisible by"
+    - "divided by"
+    - "a multiple of"
+    
+  EVEN_COUNT:
+    - "even number of"
+    - "even count of"
+    - "count of ... is even"
+    - "number of ... is even"
+    - "even amount of"
+    - "even quantity of"
+    
+  ODD_COUNT:
+    - "odd number of"
+    - "odd count of"
+    - "count of ... is odd"
+    - "number of ... is odd"
+    - "odd amount of"
+    - "odd quantity of"
+
+# Context headers for different alphabets
+context_headers:
+  binary:
+    - "binary"
+    - "binary strings"
+    - "binary system"
+    - "in binary"
+    - "binary alphabet"
+  ternary:
+    - "ternary"
+    - "ternary system"
+    - "in ternary"
+    - "ternary alphabet"
+    - "three-symbol"
+  decimal:
+    - "decimal"
+    - "decimal digits"
+    - "decimal system"
+    - "in decimal"
+    - "decimal alphabet"
+    - "ten-digit"
+  hex:
+    - "hexadecimal"
+    - "hex"
+    - "hex system"
+    - "in hex"
+    - "hex alphabet"
+    - "sixteen-digit"
+
+# Alphabet definitions
+alphabets:
+  binary: ["0", "1"]
+  ternary: ["0", "1", "2"]
+  decimal: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+  hex: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"]
+  letter_binary: ["a", "b"]
+  letter_ternary: ["a", "b", "c"]
+
+# Safe composite combinations
+safe_combinations:
+  and:
+    - ["STARTS_WITH", "ENDS_WITH"]
+    - ["STARTS_WITH", "CONTAINS"]
+    - ["STARTS_WITH", "EXACT_LENGTH"]
+    - ["ENDS_WITH", "CONTAINS"]
+    - ["ENDS_WITH", "EXACT_LENGTH"]
+    - ["CONTAINS", "EXACT_LENGTH"]
+    - ["EVEN_COUNT", "STARTS_WITH"]
+    - ["ODD_COUNT", "ENDS_WITH"]
+  or:
+    - ["STARTS_WITH", "ENDS_WITH"]
+    - ["STARTS_WITH", "CONTAINS"]
+    - ["CONTAINS", "EXACT_LENGTH"]
+    - ["STARTS_WITH", "EXACT_LENGTH"]

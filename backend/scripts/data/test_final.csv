@@ -1,0 +1,6 @@
+prompt,category,expected_type,difficulty,must_accept,must_reject,is_contradiction
+"suffixed by 'bab' and For strings over alphabet {a, b}, includes the substring 'bb'",Composite_AND,AND,hard,bbab;abbbab;bbbbbbab,aaaaba;aaa,false
+"has the suffix 'a' or For strings over alphabet {a, b}, right-anchored by 'aa'",Composite_OR,OR,hard,baba;aa;aaa;abaaaabaa,;b;ab,false
+"length is 4 or In the in binary, length is 5",Composite_OR,OR,hard,0111;0000;01001;00000,;0;1,false
+does not end with '010011',Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,hard,1;1110011011011;111011;1000;111110,0010011;010011;010011010011;1010011,false
+"For decimal digits, not suffixed by '2181'",Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,medium,83;83503056;13953767;218;96965328,02181;12181;21812181;2181,false

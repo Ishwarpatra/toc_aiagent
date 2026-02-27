@@ -1,0 +1,11 @@
+prompt,category,expected_type,difficulty,must_accept,must_reject,is_contradiction
+even number of 'd',Atomic_Count,EVEN_COUNT,easy,dd;0ddd0dd0d0d0ddd;;d00d;dddd0dddd,00ddd0000d0d;d0d0000d;d0;0dd0ddd00d0d0;0d000d000dd00d,false
+"For decimal digits, not suffixed by '2181'",Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,medium,83;83503056;13953767;218;96965328,02181;12181;21812181;2181,false
+right-anchored by '1' and length is 2,Composite_AND,AND,hard,01,0110000;1,false
+count of 0 between 4 and 5,Composite_Range,COMPOSITE_RANGE,hard,000011;0000011,00011;00000011,false
+includes the substring '100' and includes '10',Composite_AND,AND,hard,100;1001;1000,01111;0,false
+left-anchored by 'ba' or ends with 'aab',Composite_OR,OR,hard,bab;baba;baab;aaab,;a;b,false
+"has '001' and In the binary strings, includes the substring '0'",Composite_AND,AND,hard,001;1001;0001,11;,false
+does not end with '010011',Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,hard,1;1110011011011;111011;1000;111110,0010011;010011;010011010011;1010011,false
+suffixed by 'b',Atomic_ENDS_WITH,ENDS_WITH,easy,ab;babbbbbbababab;abbabab;aaaabb;babababbabaab,baaabaa;bba;bbbbbaabbabbba;a;aaaaabaababaaaa,false
+"In the ternary system, free of '00001'",Negation_NOT_CONTAINS,NOT_CONTAINS,hard,01012011222;1211;2121000222021;01212112211020;122120200221,000011;0000100001;000001;000010;100001,false
