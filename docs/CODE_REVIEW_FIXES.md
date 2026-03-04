@@ -8,7 +8,7 @@ This document summarizes all fixes implemented to address the code review findin
 ## 1. Architectural Decoupling (The Oracle) ✅
 
 ### Files Created/Modified:
-- `backend/python_imply/core/oracle.py` - Already existed, confirmed as single source of truth
+- `backend/src/core/oracle.py` - Already existed, confirmed as single source of truth
 - `backend/scripts/batch_verify.py` - Now imports from `core.oracle`
 - `backend/scripts/generate_tests.py` - Already imports from `core.oracle`
 
@@ -41,7 +41,7 @@ This document summarizes all fixes implemented to address the code review findin
 ## 3. Structured Telemetry ✅
 
 ### Files Created:
-- `backend/python_imply/core/logging_config.py` - Production logging configuration
+- `backend/src/core/logging_config.py` - Production logging configuration
 
 ### Files Modified:
 - `backend/scripts/batch_verify.py`
@@ -65,7 +65,7 @@ This document summarizes all fixes implemented to address the code review findin
 ## 4. Magic Strings and Duplicated State ✅
 
 ### Files Created:
-- `backend/python_imply/core/pattern_parser.py` - Centralized pattern parsing
+- `backend/src/core/pattern_parser.py` - Centralized pattern parsing
 
 ### Files Modified:
 - `backend/scripts/generate_tests.py`
@@ -83,7 +83,7 @@ This document summarizes all fixes implemented to address the code review findin
 ## 5. Incomplete Cache Verification ✅
 
 ### Files Created:
-- `backend/python_imply/core/cache.py` - Persistent SQLite cache
+- `backend/src/core/cache.py` - Persistent SQLite cache
 
 ### Files Modified:
 - `backend/scripts/batch_verify.py`
@@ -116,7 +116,7 @@ This document summarizes all fixes implemented to address the code review findin
 ## 6. Additional Improvements
 
 ### 6.1 Schema Validation ✅
-**File Created:** `backend/python_imply/core/schemas.py`
+**File Created:** `backend/src/core/schemas.py`
 
 - Pydantic models for `TestCase`, `TestResult`, `BatchSummary`
 - CSV loading validates each row against `TestCase` schema
@@ -146,7 +146,7 @@ This document summarizes all fixes implemented to address the code review findin
 - Functionality now in `batch_verify.py`
 
 ### 6.5 Core Module Exports ✅
-**File Modified:** `backend/python_imply/core/__init__.py`
+**File Modified:** `backend/src/core/__init__.py`
 
 - Centralized exports for all core modules
 - Clean imports: `from core import DFACache, TestCase, get_parser`
@@ -206,7 +206,7 @@ backend/
 ├── scripts/
 │   ├── results.csv      # Test results
 │   └── failed_prompts_bank.csv  # Oracle failures
-└── python_imply/
+└── src/
     └── .cache/
         └── dfa_cache.db  # Persistent cache
 ```

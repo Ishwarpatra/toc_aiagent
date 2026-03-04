@@ -79,7 +79,7 @@ Composing DFAs (via product construction for AND/OR) multiplies state counts. To
 
 Example: run the CLI with a custom threshold
 ```bash
-python backend/python_imply/main.py --max-product-states 5000 --prompt "starts with '101' and divisible by 3"
+python backend/src/main.py --max-product-states 5000 --prompt "starts with '101' and divisible by 3"
 ```
 
 ## Examples (prompts you can try)
@@ -97,7 +97,7 @@ python backend/python_imply/main.py --max-product-states 5000 --prompt "starts w
 
 Run the Python unit tests:
 ```bash
-cd backend/python_imply
+cd backend/src
 pytest -q
 ```
 

@@ -230,7 +230,7 @@ The following edge cases are covered by test suites and should be validated when
 
 ```bash
 # Install dev dependencies
-cd backend/python_imply
+cd backend/src
 pip install -r requirements-dev.txt
 
 # Run with coverage
