@@ -38,13 +38,13 @@ jobs:
       
       - name: Install dependencies
         run: |
-          cd backend/python_imply
+          cd backend/src
           pip install -r requirements-dev.txt
-      
+
       - name: Run unit tests with coverage
         run: |
-          cd backend/python_imply
-          python -m pytest test/ -v --tb=short --cov=core --cov=. --cov-report=term-missing
+          cd backend/src
+          python -m pytest tests/ -v --tb=short --cov=core --cov=main --cov-fail-under=80 --cov-report=term-missing
   
   # ==========================================================================
   # Oracle QA Pipeline - Black Box testing with ground truth validation
@@ -74,18 +74,18 @@ jobs:
       
       - name: Install Python dependencies
         run: |
-          cd backend/python_imply
+          cd backend/src
           pip install -r requirements.txt
-      
+
       - name: Generate test cases
         run: |
-          cd backend/scripts
+          cd backend/qa
           python generate_tests.py --output qa_tests.csv --count $TEST_COUNT
-      
+
       - name: Run QA Pipeline
         id: qa
         run: |
-          cd backend/scripts
+          cd backend/qa
           python batch_verify.py \
             --input qa_tests.csv \
             --output qa_results.csv \
@@ -93,30 +93,30 @@ jobs:
             --no-color \
             2>&1 | tee qa_output.log
         continue-on-error: true
-      
+
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-results
           path: |
-            backend/scripts/qa_tests.csv
-            backend/scripts/qa_results.csv
-            backend/scripts/qa_output.log
-            backend/scripts/failed_prompts_bank.csv
+            backend/qa/qa_tests.csv
+            backend/qa/qa_results.csv
+            backend/qa/qa_output.log
+            backend/qa/failed_prompts_bank.csv
           retention-days: 30
-      
+
       - name: Check QA results
         run: |
-          if [ -f backend/scripts/qa_results.csv ]; then
+          if [ -f backend/qa/qa_results.csv ]; then
             echo "=== QA Results Summary ==="
-            head -20 backend/scripts/qa_results.csv
+            head -20 backend/qa/qa_results.csv
             
             # Count results
-            TOTAL=$(tail -n +2 backend/scripts/qa_results.csv | wc -l)
-            PASSED=$(grep -c ",PASS," backend/scripts/qa_results.csv || echo 0)
-            FAILED=$(grep -c ",FAIL," backend/scripts/qa_results.csv || echo 0)
-            ORACLE_FAILED=$(grep -c ",ORACLE_FAIL," backend/scripts/qa_results.csv || echo 0)
+            TOTAL=$(tail -n +2 backend/qa/qa_results.csv | wc -l)
+            PASSED=$(grep -c ",PASS," backend/qa/qa_results.csv || echo 0)
+            FAILED=$(grep -c ",FAIL," backend/qa/qa_results.csv || echo 0)
+            ORACLE_FAILED=$(grep -c ",ORACLE_FAIL," backend/qa/qa_results.csv || echo 0)
             
             echo ""
             echo "Total: $TOTAL"
@@ -160,19 +160,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
-          cd backend/python_imply
+          cd backend/src
           pip install -r requirements.txt
-      
+
       - name: Run Extended QA Pipeline
         run: |
-          cd backend/scripts
+          cd backend/qa
           python run_qa_pipeline.py --count 500
         continue-on-error: true
-      
+
       - name: Upload extended results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: extended-qa-results
-          path: backend/scripts/qa_output/
+          path: backend/qa/qa_output/
           retention-days: 30
