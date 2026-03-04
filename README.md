@@ -36,14 +36,14 @@ toc_aiagent/
 │
 ├── docs/                           # 📖 All documentation
 │   ├── architecture.md             # System design & agent pipeline
-│   ├── DEPLOYMENT.md               # Production deployment guide
-│   ├── TESTING.md                  # Testing strategy & coverage
-│   ├── CONTRIBUTING.md             # Contribution guidelines
-│   ├── CHANGELOG.md                # Version history & roadmap
+│   ├── deployment.md               # Production deployment guide
+│   ├── testing.md                  # Testing strategy & coverage
+│   ├── contributing.md             # Contribution guidelines
+│   ├── changelog.md                # Version history & roadmap
 │   └── commit_history.md           # Detailed commit log
 │
 ├── backend/
-│   ├── python_imply/               # 🐍 Python backend (FastAPI)
+│   ├── src/                        # 🐍 Python backend (FastAPI)
 │   │   ├── api.py                  # REST API server
 │   │   ├── main.py                 # DFA generator orchestrator
 │   │   ├── core/                   # Core engine modules
@@ -54,11 +54,12 @@ toc_aiagent/
 │   │   │   ├── optimizer.py        # State minimization (BFS/DFS)
 │   │   │   ├── product.py          # Product construction (AND/OR/NOT)
 │   │   │   ├── oracle.py           # Test oracle for QA
-│   │   │   └── normalizer.py       # Prompt normalization
-│   │   ├── test/                   # Unit & integration tests
+│   │   │   ├── normalizer.py       # Prompt normalization
+│   │   │   └── pattern_parser.py   # Pattern parsing utilities
+│   │   ├── tests/                  # Unit & integration tests
 │   │   ├── requirements.txt        # Production dependencies
 │   │   └── requirements-dev.txt    # Dev/test dependencies
-│   ├── scripts/                    # QA & batch verification scripts
+│   ├── qa/                         # QA & batch verification scripts
 │   │   ├── batch_verify.py         # Batch DFA verification
 │   │   ├── generate_tests.py       # Test case generator
 │   │   ├── run_qa_pipeline.py      # Full QA pipeline
@@ -77,23 +78,21 @@ toc_aiagent/
 │   └── package.json
 │
 └── scripts/                        # 🔧 Dev utility scripts
-    ├── install-hooks.ps1           # Git hook installer
-    ├── debug_parsing.py            # Parser debugging tool
-    └── test_correctness.py         # End-to-end correctness check
+    └── install-hooks.ps1           # Git hook installer
 ```
 
 ### Core Modules
 
 | Module | Location | Description |
 |--------|----------|-------------|
-| `api.py` | `backend/python_imply/` | FastAPI server — `/generate`, `/health`, `/export/*` endpoints |
-| `main.py` | `backend/python_imply/` | `DFAGeneratorSystem` orchestrating the pipeline |
-| `agents.py` | `backend/python_imply/core/` | AnalystAgent (NL → LogicSpec) + ArchitectAgent (LogicSpec → DFA) |
-| `models.py` | `backend/python_imply/core/` | Pydantic models for `LogicSpec` and `DFA` |
-| `repair.py` | `backend/python_imply/core/` | LLM-based auto-repair for failed validations |
-| `optimizer.py` | `backend/python_imply/core/` | Removes unreachable/non-productive states |
-| `validator.py` | `backend/python_imply/core/` | Deterministic validation against test cases |
-| `product.py` | `backend/python_imply/core/` | Product construction for AND/OR/NOT operations |
+| `api.py` | `backend/src/` | FastAPI server — `/generate`, `/health`, `/export/*` endpoints |
+| `main.py` | `backend/src/` | `DFAGeneratorSystem` orchestrating the pipeline |
+| `agents.py` | `backend/src/core/` | AnalystAgent (NL → LogicSpec) + ArchitectAgent (LogicSpec → DFA) |
+| `models.py` | `backend/src/core/` | Pydantic models for `LogicSpec` and `DFA` |
+| `repair.py` | `backend/src/core/` | LLM-based auto-repair for failed validations |
+| `optimizer.py` | `backend/src/core/` | Removes unreachable/non-productive states |
+| `validator.py` | `backend/src/core/` | Deterministic validation against test cases |
+| `product.py` | `backend/src/core/` | Product construction for AND/OR/NOT operations |
 
 ## 🛠️ Tech Stack
 
@@ -123,7 +122,7 @@ toc_aiagent/
 Navigate to the backend directory and install dependencies:
 
 ```bash
-cd backend/python_imply
+cd backend/src
 pip install -r requirements.txt
 ```
 
