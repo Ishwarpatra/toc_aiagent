@@ -1,0 +1,5 @@
+prompt,category,expected_type,actual_type,difficulty,status,states,time_ms,internal_validated,oracle_validated,oracle_accept_failures,oracle_reject_failures,cache_key,cache_hit,error
+starts with 'a',Atomic,STARTS_WITH,STARTS_WITH,easy,PASS,3,128.26,True,True,,,a9663335b731f9b0,False,
+ends with 'b',Atomic,ENDS_WITH,ENDS_WITH,easy,PASS,2,132.61,True,True,,,b6aeffe5c726c7e8,False,
+contains '01',Atomic,CONTAINS,CONTAINS,easy,PASS,3,120.53,True,True,,,fd21ad59e250ca7c,False,
+even number of 1s,Atomic_Count,EVEN_COUNT,EVEN_COUNT,easy,PASS,2,119.2,True,True,,,877fb24f292c7e5b,False,

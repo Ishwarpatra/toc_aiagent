@@ -1,0 +1,5 @@
+prompt,category,expected_type,difficulty,must_accept,must_reject,is_contradiction
+"starts with 'a'",Atomic,STARTS_WITH,easy,a;ab;aa,b;ba,false
+"ends with 'b'",Atomic,ENDS_WITH,easy,b;ab;aab,a;ba,false
+"contains '01'",Atomic,CONTAINS,easy,01;001,0;1;00,false
+"even number of 1s",Atomic_Count,EVEN_COUNT,easy,;0;11,1;01,false

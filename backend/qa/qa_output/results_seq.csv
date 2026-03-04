@@ -1,0 +1,6 @@
+prompt,category,expected_type,actual_type,difficulty,status,states,time_ms,internal_validated,oracle_validated,oracle_accept_failures,oracle_reject_failures,cache_key,cache_hit,error
+"suffixed by 'bab' and For strings over alphabet {a, b}, includes the substring 'bb'",Composite_AND,AND,AND,hard,PASS,6,59.67,True,True,,,7bf0cd3cf8c838f9,False,
+"has the suffix 'a' or For strings over alphabet {a, b}, right-anchored by 'aa'",Composite_OR,OR,OR,hard,PASS,2,25.96,True,True,,,86e3c25f2c6f1860,False,
+"length is 4 or In the in binary, length is 5",Composite_OR,OR,OR,hard,PASS,7,27.45,True,True,,,e7e2fbff7943469d,False,
+does not end with '010011',Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,NOT_ENDS_WITH,hard,PASS,7,18.36,True,True,,,f51fbb671ac27239,False,
+"For decimal digits, not suffixed by '2181'",Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,NOT_ENDS_WITH,medium,PASS,5,17.86,True,True,,,e0f2ea55af6f359e,False,

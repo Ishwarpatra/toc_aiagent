@@ -1,0 +1,97 @@
+#!/bin/sh
+# =============================================================================
+# Pre-Commit Hook for Auto-DFA
+# =============================================================================
+#
+# This hook runs a "Smoke Test" before allowing commits to ensure
+# the DFA generation logic is working correctly.
+#
+# INSTALLATION:
+#   1. Copy this file to .git/hooks/pre-commit
+#   2. Make it executable: chmod +x .git/hooks/pre-commit
+#
+#   Or on Windows (PowerShell):
+#   Copy-Item scripts/pre-commit .git/hooks/pre-commit
+#
+# TO SKIP (Emergency only):
+#   git commit --no-verify -m "message"
+#
+# =============================================================================
+
+echo "🧪 Running DFA Smoke Tests..."
+echo "   (To skip: git commit --no-verify)"
+echo ""
+
+# Navigate to scripts directory
+SCRIPT_DIR="$(git rev-parse --show-toplevel)/backend/scripts"
+
+if [ ! -d "$SCRIPT_DIR" ]; then
+    echo "⚠️  Warning: backend/scripts not found. Skipping smoke tests."
+    exit 0
+fi
+
+cd "$SCRIPT_DIR" || exit 0
+
+# Check if Python is available
+if ! command -v python &> /dev/null; then
+    echo "⚠️  Warning: Python not found. Skipping smoke tests."
+    exit 0
+fi
+
+# Generate a small test suite
+echo "   [1/3] Generating 30 test cases..."
+python generate_tests.py --count 30 --output smoke_test.csv 2>/dev/null
+
+if [ $? -ne 0 ] || [ ! -f smoke_test.csv ]; then
+    echo "⚠️  Warning: Could not generate tests. Skipping smoke tests."
+    exit 0
+fi
+
+# Run verification
+echo "   [2/3] Running verification..."
+OUTPUT=$(python batch_verify.py --input smoke_test.csv --no-color 2>&1)
+EXIT_CODE=$?
+
+# Parse results
+PASS_COUNT=$(echo "$OUTPUT" | grep -o "PASSED: [0-9]*" | grep -o "[0-9]*" || echo "0")
+FAIL_COUNT=$(echo "$OUTPUT" | grep -o "FAILED: [0-9]*" | grep -o "[0-9]*" || echo "0")
+ORACLE_FAIL_COUNT=$(echo "$OUTPUT" | grep -o "ORACLE_FAILED: [0-9]*" | grep -o "[0-9]*" || echo "0")
+
+# Clean up
+rm -f smoke_test.csv
+
+# Report results
+echo "   [3/3] Results:"
+echo "         Passed: $PASS_COUNT"
+echo "         Failed: $FAIL_COUNT"
+echo "         Oracle Failures: $ORACLE_FAIL_COUNT"
+echo ""
+
+# Check if tests passed
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "❌ SMOKE TESTS FAILED!"
+    echo ""
+    echo "   Some tests did not pass. Please fix the issues before committing."
+    echo ""
+    echo "   To debug, run:"
+    echo "     cd backend/scripts"
+    echo "     python generate_tests.py --count 30 --output test.csv"
+    echo "     python batch_verify.py --input test.csv --verbose"
+    echo ""
+    echo "   To skip this check (not recommended):"
+    echo "     git commit --no-verify -m \"your message\""
+    echo ""
+    exit 1
+fi
+
+# Warn about Oracle failures (but allow commit)
+if [ "$ORACLE_FAIL_COUNT" -gt "0" ]; then
+    echo "⚠️  WARNING: $ORACLE_FAIL_COUNT Oracle failure(s) detected."
+    echo "   The Analyst may be misinterpreting some prompts."
+    echo "   Consider running: python retrain_analyst.py"
+    echo ""
+fi
+
+echo "✅ Smoke tests passed! Proceeding with commit..."
+echo ""
+exit 0

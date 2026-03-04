@@ -1,0 +1,11 @@
+prompt,category,expected_type,actual_type,difficulty,status,states,time_ms,internal_validated,oracle_validated,oracle_accept_failures,oracle_reject_failures,cache_key,cache_hit,error
+even number of 'd',Atomic_Count,EVEN_COUNT,EVEN_COUNT,easy,PASS,2,141.33,True,True,,,e4972afbd4b4aa61,False,
+"For decimal digits, not suffixed by '2181'",Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,NOT_ENDS_WITH,medium,PASS,5,134.51,True,True,,,e0f2ea55af6f359e,False,
+right-anchored by '1' and length is 2,Composite_AND,AND,AND,hard,PASS,4,153.37,True,True,,,2a59700f110ece1a,False,
+count of 0 between 4 and 5,Composite_Range,COMPOSITE_RANGE,AND,hard,PASS,7,97.56,True,True,,,a5df658ca967059e,False,
+includes the substring '100' and includes '10',Composite_AND,AND,AND,hard,PASS,4,139.72,True,True,,,e407a26617b72ef7,False,
+left-anchored by 'ba' or ends with 'aab',Composite_OR,OR,OR,hard,PASS,7,56.49,True,True,,,e8b02df5f8ffe8a8,False,
+"has '001' and In the binary strings, includes the substring '0'",Composite_AND,AND,AND,hard,PASS,4,135.38,True,True,,,816e004803bde72b,False,
+does not end with '010011',Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,NOT_ENDS_WITH,hard,PASS,7,120.48,True,True,,,f51fbb671ac27239,False,
+suffixed by 'b',Atomic_ENDS_WITH,ENDS_WITH,ENDS_WITH,easy,PASS,2,106.54,True,True,,,0b65065aab737092,False,
+"In the ternary system, free of '00001'",Negation_NOT_CONTAINS,NOT_CONTAINS,NOT_CONTAINS,hard,PASS,6,58.62,True,True,,,bf86a3bc6933c65f,False,

@@ -1,0 +1,11 @@
+prompt,category,expected_type,difficulty,must_accept,must_reject,is_contradiction
+divisible by 2 or length is 3,Composite_OR,OR,hard,100;1010;000;101,1;01;11,false
+"In the ternary system, free of '00001'",Negation_NOT_CONTAINS,NOT_CONTAINS,hard,01012011222;1211;2121000222021;01212112211020;122120200221,000011;0000100001;000001;000010;100001,false
+"For strings over alphabet {a, b}, containing 'ab' or includes the substring 'ba'",Composite_OR,OR,hard,bbaaababbbaa;bbbbab;aba;baabaa,;a;b,false
+count of 0 between 4 and 5,Composite_Range,COMPOSITE_RANGE,hard,11000;00000;01000;01001,0101;;5;1001;100101000000111,false
+suffixed by 'b',Atomic_ENDS_WITH,ENDS_WITH,easy,ab;babbbbbbababab;abbabab;aaaabb;babababbabaab,baaabaa;bba;bbbbbaabbabbba;a;aaaaabaababaaaa,false
+length is 3 or length is 2,Composite_OR,OR,hard,000;011;01;20,;0;1,false
+odd number of 'e',Atomic_Count,ODD_COUNT,easy,000e00e0ee0e;0e00000;000e0;00e;000e00eee00e00,0e0e;0eeee;ee000ee;ee000ee00;0e00e00eeee00,false
+does not end with '010011',Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,hard,1;1110011011011;111011;1000;111110,0010011;010011;010011010011;1010011,false
+"For decimal digits, not suffixed by '2181'",Negation_NOT_ENDS_WITH,NOT_ENDS_WITH,medium,83;83503056;13953767;218;96965328,02181;12181;21812181;2181,false
+"For strings over alphabet {a, b}, length is 4 or For strings over alphabet {a, b}, begins with 'a'",Composite_OR,OR,hard,aaaa;abaa;aaababbbbbbb;aabaababbaabbaa,;b;ba,false
