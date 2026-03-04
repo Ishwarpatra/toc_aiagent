@@ -4,7 +4,7 @@ This document outlines the Quality Assurance (QA) architecture for the Auto-DFA 
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 **Run the full QA pipeline (1000 tests):**
 
@@ -20,7 +20,7 @@ python backend/scripts/batch_verify.py
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 The QA system consists of three main components:
 
