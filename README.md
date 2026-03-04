@@ -2,7 +2,7 @@
 
 Auto-DFA is an intelligent system that translates natural language descriptions (e.g., "strings ending in '01'") into fully functional and visualized Deterministic Finite Automata (DFA). It uses a multi-agent architecture with specialized AI agents for analysis and design, backed by a deterministic validation engine.
 
-## 🚀 Features
+## Features
 
 * **Natural Language to DFA**: Describe your logic in plain English.
 * **AI Agent Architecture**: Utilizes an **Analyst Agent** for requirement extraction and an **Architect Agent** for state-machine design.
@@ -11,22 +11,22 @@ Auto-DFA is an intelligent system that translates natural language descriptions 
 * **Responsive Visualization**: Real-time rendering of DFA diagrams using Mermaid.js, optimized for any screen size.
 * **Flexible UI**: A modern, mobile-friendly interface with a dedicated question area and toolbar.
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌──────────────────┐         HTTP POST         ┌───────────────────┐
-│   React Frontend │ ──────────────────────►   │   FastAPI Backend │
-│   (port 5173)    │    /generate endpoint     │   (port 8000)     │
-│                  │ ◄──────────────────────   │                   │
-│   App.jsx        │    JSON Response          │   api.py          │
-│   Canvas.jsx     │    (DFA states/edges)     │      ↓            │
-└──────────────────┘                           │ DFAGeneratorSystem│
-                                               │      ↓            │
-                                               │   Ollama LLM      │
-                                               └───────────────────┘
++------------------+         HTTP POST         +-------------------+
+|   React Frontend | ---------------------->   |   FastAPI Backend |
+|   (port 5173)    |    /generate endpoint     |   (port 8000)     |
+|                  | <----------------------   |                   |
+|   App.jsx        |    JSON Response          |   api.py          |
+|   Canvas.jsx     |    (DFA states/edges)     |      v            |
++------------------+                           | DFAGeneratorSystem|
+                                               |      v            |
+                                               |   Ollama LLM      |
+                                               +-------------------+
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 toc_aiagent/

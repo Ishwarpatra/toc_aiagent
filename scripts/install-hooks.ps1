@@ -9,13 +9,13 @@
 #   .\install-hooks.ps1
 # =============================================================================
 
-Write-Host "`n🔧 Auto-DFA Git Hook Installer" -ForegroundColor Cyan
+Write-Host "`n[TOOLS] Auto-DFA Git Hook Installer" -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor DarkGray
 
 # 1. Locate directories
 $RepoRoot = git rev-parse --show-toplevel 2>$null
 if (-not $RepoRoot) {
-    Write-Host "❌ Error: Not a git repository." -ForegroundColor Red
+    Write-Host "ERROR: Not a git repository." -ForegroundColor Red
     exit 1
 }
 
