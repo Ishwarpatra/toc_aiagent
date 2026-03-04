@@ -125,13 +125,7 @@ Chronological record of all commits (oldest to newest).
 
 ---
 
-## Contributors
 
-| Contributor | Commits |
-|-------------|---------|
-| Ishwar Patra | 50+ |
-| Krishagrawal04 | 1 |
-| SpyBroker | 1 |
 
 ---
 
