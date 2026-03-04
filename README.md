@@ -94,7 +94,7 @@ toc_aiagent/
 | `validator.py` | `backend/src/core/` | Deterministic validation against test cases |
 | `product.py` | `backend/src/core/` | Product construction for AND/OR/NOT operations |
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Frontend
 * **Framework**: React (Vite)
@@ -109,7 +109,7 @@ toc_aiagent/
 * **Data Validation**: Pydantic
 * **Logic Engine**: Custom multi-agent system (Analyst, Architect, Validator)
 
-## 🏁 Getting Started
+## Getting Started
 
 ### 1. Prerequisites
 * Node.js and npm
@@ -155,7 +155,7 @@ npm run dev
 
 Open your browser to http://localhost:5173.
 
-## 📖 Usage
+## Usage
 
 1. Enter a DFA description in the **Question Area** at the top:
    - `"ends with a"` or `"ends with 'a'"`
@@ -164,7 +164,7 @@ Open your browser to http://localhost:5173.
    - `"even number of 1s"`
    - `"divisible by 3"`
 
-2. Click the **▶ Play** button at the bottom.
+2. Click the **Play** button at the bottom.
 
 3. The system will:
    - Analyze the prompt (Analyst Agent)
@@ -173,7 +173,7 @@ Open your browser to http://localhost:5173.
    - Validate against test cases
    - Display the diagram on the Canvas
 
-## 🔧 API Endpoints
+## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -212,7 +212,7 @@ curl -X POST http://localhost:8000/generate \
 }
 ```
 
-## 🧹 DFA Optimizer
+## DFA Optimizer
 
 The optimizer module (`core/optimizer.py`) ensures clean, minimal DFAs by:
 
@@ -225,6 +225,6 @@ Example optimization:
 - Before: `['q0', 'q1', 'q_dead']` (3 states)
 - After: `['q0', 'q1']` (2 states) - orphaned dead state removed
 
-## 📝 License
+## License
 
 MIT License
