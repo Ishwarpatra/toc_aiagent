@@ -1,0 +1,11 @@
+# Dev/Test dependencies (install with: pip install -r requirements-dev.txt)
+-r requirements.txt
+
+# Testing
+pytest>=7.0
+pytest-cov>=4.0
+httpx>=0.24
+
+# Linting & Type Checking
+ruff>=0.4
+mypy>=1.0
