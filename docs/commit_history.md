@@ -1,11 +1,11 @@
-Commit Record (History)
+﻿Commit Record (History)
 This document records the sequence of notable commits and feature changes for the repository.
 Each entry contains: Commit: <Title>, Author: <Name>, Date (YYYY-MM-DD), and a short summary of changes.
 
 ---
 
 Commit: refactor: restructure repository to Python conventions + achieve 81% test coverage
-Author: CodeMaster (Enterprise Engineering Standards)
+Author: Ishwar Patra (Enterprise Engineering Standards)
 Date: 2026-03-04
 Summary:
 
@@ -110,10 +110,10 @@ toc_aiagent/
 ---
 
 Commit: refactor: implement concurrency-safe cache with context manager protocol
-Author: CodeMaster (Senior Project Manager Directives)
+Author: Ishwar Patra (Senior Project Manager Directives)
 Date: 2026-02-27
 Summary:
-- CRITICAL FIXES (Code Master Directives - Round 2):
+- CRITICAL FIXES (Ishwar Patra Directives - Round 2):
   * Context Manager protocol: Added __enter__/__exit__ to DFAGeneratorSystem
   * Worker function updated to use 'with DFAGeneratorSystem() as system:' pattern
   * Guarantees deterministic cache.close() regardless of success/failure
@@ -154,10 +154,10 @@ Test Results: All tests pass with 100% cache hit ratio on repeated runs
 ---
 
 Commit: feat: Complete code review fixes for production-ready DFA pipeline
-Author: CodeMaster (Senior Project Manager Directives)
+Author: Ishwar Patra (Senior Project Manager Directives)
 Date: 2026-02-27
 Summary:
-- CRITICAL FIXES (Code Master Directives):
+- CRITICAL FIXES (Ishwar Patra Directives):
   * Fix package collision: removed stray backend/core/__init__.py causing import errors
   * Fix conftest.py: removed BACKEND_ROOT path injection, only adds SRC_DIR
   * Fix cache routing: _build_atomic_dfa now raises ValueError instead of returning None
