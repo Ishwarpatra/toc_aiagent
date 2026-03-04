@@ -102,10 +102,10 @@ toc_aiagent/
 ```
 
 **VERIFICATION:**
-- ✅ 405 tests passing
-- ✅ 81% coverage maintained (enforced by CI/CD with --cov-fail-under=80)
-- ✅ All imports working correctly
-- ✅ No remaining 'python_imply' references
+- 405 tests passing
+- 81% coverage maintained (enforced by CI/CD with --cov-fail-under=80)
+- All imports working correctly
+- No remaining 'python_imply' references
 
 ---
 
