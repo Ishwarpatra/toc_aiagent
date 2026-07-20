@@ -1,0 +1,28 @@
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Python bytecode and caches
+__pycache__/
+
+# Project image inputs
+images/
+
+# Project generated outputs
+outputs/
+test_accuracy/accuracy_report.txt
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
