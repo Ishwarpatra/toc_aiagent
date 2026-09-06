@@ -98,19 +98,20 @@ class PatternParser:
             if match:
                 groups = match.groups()
                 # Handle different pattern formats
-                if len(groups) >= 3:
-                    # Format: (symbol, divisor, remainder) or (parity, symbol, _)
-                    if groups[0] and groups[0].lower() in ["odd", "even"]:
-                        # Parity format: (odd/even, symbol, _)
-                        parity = groups[0].lower()
-                        symbol = groups[1] if len(groups) > 1 else "1"
-                        return (symbol, 2, 1 if parity == "odd" else 0)
-                    else:
-                        # Modulo format: (symbol, divisor, remainder)
-                        try:
-                            return (groups[0] or "1", int(groups[1]), int(groups[2]))
-                        except (ValueError, IndexError):
-                            continue
+                if len(groups) >= 2 and groups[0] and groups[0].lower() in ["odd", "even"]:
+                    parity = groups[0].lower()
+                    symbol = groups[1] if len(groups) > 1 and groups[1] else "1"
+                    return (symbol, 2, 1 if parity == "odd" else 0)
+                elif len(groups) >= 2 and groups[-1] and groups[-1].lower() in ["odd", "even"]:
+                    parity = groups[-1].lower()
+                    symbol = groups[0] if groups[0] else "1"
+                    return (symbol, 2, 1 if parity == "odd" else 0)
+                elif len(groups) >= 3:
+                    # Modulo format: (symbol, divisor, remainder)
+                    try:
+                        return (groups[0] or "1", int(groups[1]), int(groups[2]))
+                    except (ValueError, IndexError):
+                        continue
         return None
 
     def extract_negation_type(self, text: str) -> Optional[str]:
