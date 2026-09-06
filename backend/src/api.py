@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown — call close() first to flush diskcache WAL before nulling reference
+    # Shutdown: call close() first to flush diskcache WAL before nulling reference
     logger.info("Shutting down DFA Generator System...")
     if app.state.system is not None:
         try:
@@ -319,7 +319,7 @@ async def generate_dfa(request: Request, query: QueryRequest):
         timings["validation_ms"] = round((time.time() - t_phase) * 1000, 1)
         
         total_ms = round((time.time() - t_start) * 1000, 1)
-        logger.info(f"[API][{request_id}] Done in {total_ms}ms — valid={is_valid}")
+        logger.info(f"[API][{request_id}] Done in {total_ms}ms (valid={is_valid})")
         
         return {
             "valid": is_valid,
@@ -577,7 +577,7 @@ async def root():
 
 
 # ---------------------------------------------------------------------------
-# Oracle endpoint — wraps core/oracle.py for production runtime monitoring
+# Oracle endpoint: wraps core/oracle.py for production runtime monitoring
 # ---------------------------------------------------------------------------
 
 class OracleRequest(BaseModel):

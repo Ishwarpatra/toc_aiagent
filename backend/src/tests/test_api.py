@@ -130,7 +130,7 @@ class TestInputValidation:
 
 
 # ---------------------------------------------------------------------------
-# Generate endpoint — success path
+# Generate endpoint: success path
 # ---------------------------------------------------------------------------
 
 class TestGenerateEndpoint:

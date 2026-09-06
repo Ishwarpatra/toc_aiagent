@@ -284,7 +284,7 @@
   background: var(--error-bg);
   border: 1px solid var(--error-border);
   border-radius: 10px;
-  /* --error-text (#b91c1c) achieves 5.28:1 on --error-bg (#fef2f2) — PASS (was #dc2626: 4.41:1 FAIL) */
+  /* --error-text (#b91c1c) achieves 5.28:1 on --error-bg (#fef2f2) (PASS, was #dc2626: 4.41:1 FAIL) */
   color: var(--error-text);
   font-size: 0.95rem;
 }
