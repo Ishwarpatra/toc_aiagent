@@ -193,7 +193,9 @@ Chronological record of all git commits and branches from repository inception t
 - `0422510` `test(coverage): add unit tests for models and validation to achieve 82% coverage` - Ishwarpatra
 - `97754f6` `docs: update commit_history.md with CI dependency and coverage fixes` - Ishwarpatra
 - `a4a0dab` `fix(tests): mock optional vision cloud provider imports for CI runner environments` - Ishwarpatra
+- `60188f8` `docs: sync commit_history.md with provider import test fix` - Ishwarpatra
+- `a66c6d0` `ci: add ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION and clean echo messages in qa.yml` - Ishwarpatra
 
 ---
 
-*Total: 115 commits recorded across all branches (Dec 2025 - Sep 2026)*
+*Total: 117 commits recorded across all branches (Dec 2025 - Sep 2026)*
