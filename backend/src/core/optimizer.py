@@ -249,7 +249,7 @@ class DFAOptimizer:
             transitions=cleaned_transitions,
             start_state=start_state,
             accept_states=cleaned_accept,
-            reasoning=dfa.reasoning + f" [Optimized: -{removed_count} states]" if removed_count > 0 else dfa.reasoning
+            reasoning=(dfa.reasoning or "") + f" [Optimized: -{removed_count} states]" if removed_count > 0 else (dfa.reasoning or "")
         )
     
     def get_optimization_report(self, original: DFA, optimized: DFA) -> Dict:
