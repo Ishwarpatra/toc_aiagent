@@ -28,6 +28,9 @@ from .pattern_parser import (
     extract_quoted_pattern,
 )
 
+from .grammar import GrammarBuilder
+from .agents import VisionAgent, DescriberAgent
+
 __all__ = [
     # Oracle
     "check_condition",
@@ -48,4 +51,8 @@ __all__ = [
     "parse_count_expression",
     "parse_range_query",
     "extract_quoted_pattern",
+    # Grammar & Reverse Engineering
+    "GrammarBuilder",
+    "VisionAgent",
+    "DescriberAgent",
 ]
