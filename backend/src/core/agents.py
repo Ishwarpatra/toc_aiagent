@@ -680,26 +680,19 @@ class ArchitectAgent(BaseAgent):
             raw_data = self.cache.get(cache_key)
             if raw_data is None:
                 self.cache_misses += 1
-                import structlog
-                log = structlog.get_logger()
-                log.info("cache_get_result", logic_type=logic_type, target=target[:30], cache_key=cache_key[:16], result_type=None, result_is_none=True, cache_hits=self.cache_hits, cache_misses=self.cache_misses)
+                logger.info(f"[Cache] Miss: logic_type={logic_type}, target={target[:30]}, hits={self.cache_hits}, misses={self.cache_misses}")
                 return None
-            
+
             # Deserialize JSON string back to tuple
             dfa_dict = json.loads(raw_data)
             result = tuple(dfa_dict.items())
-            
-            # CRITICAL: Track cache hit/miss for telemetry rollup
+
+            # Track cache hit for telemetry
             self.cache_hits += 1
-            
-            import structlog
-            log = structlog.get_logger()
-            log.info("cache_get_result", logic_type=logic_type, target=target[:30], cache_key=cache_key[:16], result_type="tuple", result_is_none=False, cache_hits=self.cache_hits, cache_misses=self.cache_misses)
+            logger.info(f"[Cache] Hit: logic_type={logic_type}, target={target[:30]}, hits={self.cache_hits}, misses={self.cache_misses}")
             return result
         except Exception as e:
-            import structlog
-            log = structlog.get_logger()
-            log.warning("cache_get_failed", logic_type=logic_type, target=target[:30], error=str(e))
+            logger.warning(f"[Cache] Get failed: logic_type={logic_type}, error={e}")
             self.cache_misses += 1
             return None
 
@@ -707,21 +700,15 @@ class ArchitectAgent(BaseAgent):
         """
         Store atomic DFA in persistent cache.
         Uses JSON serialization for reliable disk storage.
-        CRITICAL: Raises RuntimeError on cache write failure to expose serialization issues.
+        Raises RuntimeError on cache write failure to expose serialization issues.
         """
-        import json
         cache_key = self._get_atomic_spec_hash(logic_type, target, alphabet_tuple)
         try:
-            # CRITICAL: Serialize to JSON string for reliable disk storage
             dfa_dict = dict(dfa_tuple)
             json_data = json.dumps(dfa_dict)
-            result = self.cache.set(cache_key, json_data, expire=3600*24*30)
-            
-            import structlog
-            log = structlog.get_logger()
-            log.info("cache_write_success", logic_type=logic_type, target=target[:30], cache_key=cache_key[:16], result=result)
+            result = self.cache.set(cache_key, json_data, expire=3600 * 24 * 30)
+            logger.info(f"[Cache] Write success: logic_type={logic_type}, target={target[:30]}, result={result}")
         except Exception as e:
-            # CRITICAL: Raise RuntimeError to expose cache serialization failures
             raise RuntimeError(f"CACHE WRITE FAILED for {logic_type}({target[:30]}): {e}")
 
     def get_cache_stats(self) -> Dict[str, Any]:
@@ -855,26 +842,23 @@ class ArchitectAgent(BaseAgent):
         CRITICAL: For composite operations, the unified alphabet is propagated DOWN
         to all children BEFORE building them. This prevents alphabet mismatch errors.
         """
-        import structlog
-        log = structlog.get_logger()
-        
         # For atomic operations, try to use the persistent cache
         if not spec.children and spec.logic_type not in ["AND", "OR", "NOT"]:  # Atomic operation
             # Convert to hashable types for caching
             alphabet_tuple = tuple(sorted(spec.alphabet)) if spec.alphabet else ('0', '1')
-            
-            log.info("design_atomic", logic_type=spec.logic_type, target=(spec.target or "")[:30], alphabet=spec.alphabet, has_children=bool(spec.children))
-            
+
+            logger.info(f"[Architect] Design atomic: logic_type={spec.logic_type}, target={(spec.target or '')[:30]}")
+
             # Try cache first
             cached_result = self._get_cached_atomic_dfa(spec.logic_type, spec.target or "", alphabet_tuple)
             if cached_result is not None:
                 # Cache hit
-                log.info("cache_hit", logic_type=spec.logic_type, target=(spec.target or "")[:30])
+                logger.info(f"[Architect] Cache hit for {spec.logic_type}")
                 result_dict = dict(cached_result)
                 return DFA(**result_dict)
-            
+
             # Cache miss - build and store
-            log.info("cache_miss", logic_type=spec.logic_type, target=(spec.target or "")[:30])
+            logger.info(f"[Architect] Cache miss for {spec.logic_type}")
             try:
                 result_tuple = self._build_atomic_dfa(spec.logic_type, spec.target or "", list(alphabet_tuple))
                 if result_tuple is not None:
@@ -883,12 +867,12 @@ class ArchitectAgent(BaseAgent):
                     result_dict = dict(result_tuple)
                     return DFA(**result_dict)
                 else:
-                    log.warning("build_atomic returned None", logic_type=spec.logic_type)
+                    logger.warning(f"[Architect] build_atomic returned None for {spec.logic_type}")
             except Exception as e:
                 logger.info(f"[Architect] Atomic build failed for {spec.logic_type}, computing normally: {e}")
                 # If build fails, continue with normal computation
         else:
-            log.info("design_composite_or_has_children", logic_type=spec.logic_type, has_children=bool(spec.children))
+            logger.info(f"[Architect] Design composite or children: {spec.logic_type}, has_children={bool(spec.children)}")
 
         # Composite handling (unchanged from original)
         if spec.logic_type == "NOT":
