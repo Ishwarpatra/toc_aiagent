@@ -183,7 +183,12 @@ Chronological record of all git commits and branches from repository inception t
 - `2071e44` `refactor(product): clarify mathematical DFA completion comments` - Ishwarpatra
 - `1b61393` `refactor(styles): clarify CSS design token comments and remove audit notes` - Ishwarpatra
 - `378e643` `refactor(styles): clarify layout and accessibility comments in App.css` - Ishwarpatra
+- `9bb4f75` `docs: update commit and branch history with exact hashes and branch architecture` - Ishwarpatra
+- `eab9b99` `docs: update CHANGELOG for v1.2.0, fix duplicate headers, and remove em dashes` - Ishwarpatra
+- `e35bd34` `docs: update DEPLOYMENT with vision keys, QA paths, and clean phrasing` - Ishwarpatra
+- `f4736aa` `docs: update CONTRIBUTING with accurate test paths and architecture pipelines` - Ishwarpatra
+- `8b7a91c` `docs: update docs index table with all guide references` - Ishwarpatra
 
 ---
 
-*Total: 105 commits recorded across all branches (Dec 2025 - Sep 2026)*
+*Total: 110 commits recorded across all branches (Dec 2025 - Sep 2026)*
