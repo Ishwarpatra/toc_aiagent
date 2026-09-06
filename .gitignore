@@ -44,3 +44,7 @@ backend/.cache/
 
 # Debug scripts (dev only)
 backend/scripts/debug/
+
+# Agent customizations & skills
+.agents/
+
