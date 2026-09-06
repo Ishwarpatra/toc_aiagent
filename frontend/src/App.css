@@ -31,7 +31,7 @@
 .sidebar-header {
   padding: 20px;
   border-bottom: 1px solid var(--border-color);
-  /* Brand identity: deep navy conveys precision/logic; avoids the generic blue-purple training default (R-01) */
+  /* Deep navy gradient header for brand identity */
   background: linear-gradient(160deg, #1e2d4a 0%, #2c3e6b 100%);
   color: white;
 }
@@ -103,7 +103,7 @@
 
 .prompt-textarea:focus {
   border-color: var(--accent-primary);
-  /* 60% opacity gives ~3:1 contrast ratio for focus indicator (R-32 fix; was 15% = invisible) */
+  /* High-contrast focus indicator for keyboard accessibility */
   box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.6);
   outline: none;
 }
@@ -194,7 +194,7 @@
 .example-chip:hover {
   background: rgba(74, 144, 217, 0.08);
   border-color: var(--accent-primary);
-  /* Use --accent-text (5.5:1) not --accent-primary (3.34:1) for text on white (R-25 fix) */
+  /* High-contrast accent color for text on light backgrounds */
   color: var(--accent-text);
   transform: translateX(2px);
 }
@@ -284,7 +284,7 @@
   background: var(--error-bg);
   border: 1px solid var(--error-border);
   border-radius: 10px;
-  /* --error-text (#b91c1c) achieves 5.28:1 on --error-bg (#fef2f2) (PASS, was #dc2626: 4.41:1 FAIL) */
+  /* High-contrast alert text for readability on error background */
   color: var(--error-text);
   font-size: 0.95rem;
 }
@@ -424,7 +424,7 @@
   }
 
   .canvas-container {
-    /* Prevent canvas from collapsing to 0 height in column-flex mobile layout (R-03 fix) */
+    /* Ensure minimum viewport height for diagram canvas in stacked mobile layout */
     min-height: 60vh;
   }
 
