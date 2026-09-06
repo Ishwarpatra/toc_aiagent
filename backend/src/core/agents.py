@@ -620,20 +620,20 @@ class ArchitectAgent(BaseAgent):
         self.max_product_states = max_product_states
         # Initialize persistent cache with concurrency-safe settings
         import os
-        # CRITICAL: Use absolute path to avoid issues with multiprocessing spawn
+        # Use absolute path for persistent cache to support multiprocessing worker spawns
         cache_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.cache'))
         os.makedirs(cache_dir, exist_ok=True)
-        # CRITICAL: diskcache with WAL mode for concurrent read/write access
+        # Configure diskcache with WAL mode for safe concurrent reads and writes:
         # timeout=60: Wait up to 60 seconds for lock acquisition
         # sqlite_journal_mode="wal": Enable Write-Ahead Logging
-        # sqlite_synchronous=1 (NORMAL): Good balance of safety and performance
+        # sqlite_synchronous=1 (NORMAL): Balance safety and performance
         self.cache = dc.Cache(
             directory=cache_dir,
             timeout=60,
             sqlite_journal_mode="wal",
             sqlite_synchronous=1,
         )
-        # CRITICAL: Track cache hit/miss statistics for telemetry
+        # Track cache telemetry counters
         self.cache_hits = 0
         self.cache_misses = 0
 
@@ -829,8 +829,7 @@ class ArchitectAgent(BaseAgent):
             accept_states = ()
             return ("states", states), ("alphabet", alphabet_tuple), ("transitions", transitions), ("start_state", start_state), ("accept_states", accept_states)
 
-        # CRITICAL: Strict else block - never silently return None
-        # A caching layer must never return None on cache miss for unsupported keys
+        # Explicitly reject unsupported logic types rather than silently returning None
         raise ValueError(f"Unsupported atomic logic type for cache: {logic_type} (target: {t})")
 
 
@@ -839,8 +838,8 @@ class ArchitectAgent(BaseAgent):
         Design a DFA from a LogicSpec. Handles composite (AND/OR/NOT) and atomic specs.
         Uses persistent diskcache to avoid recomputing the same atomic DFA multiple times.
 
-        CRITICAL: For composite operations, the unified alphabet is propagated DOWN
-        to all children BEFORE building them. This prevents alphabet mismatch errors.
+        For composite operations, the unified alphabet is propagated down
+        to all children before building them to maintain consistent symbol spaces.
         """
         # For atomic operations, try to use the persistent cache
         if not spec.children and spec.logic_type not in ["AND", "OR", "NOT"]:  # Atomic operation
@@ -879,7 +878,7 @@ class ArchitectAgent(BaseAgent):
             if not spec.children:
                 raise ValueError("'NOT' node missing children")
 
-            # CRITICAL: Propagate parent's alphabet to child before building
+            # Propagate parent's alphabet to child before building
             full_alphabet = spec.alphabet or ['0', '1']
             self._propagate_alphabet_down(spec.children[0], full_alphabet)
 
@@ -887,8 +886,7 @@ class ArchitectAgent(BaseAgent):
             return self.product_engine.invert(child_dfa)
 
         if spec.logic_type in ["AND", "OR"]:
-            # CRITICAL FIX: Propagate unified alphabet DOWN to all children FIRST
-            # This ensures all partial DFAs speak the same language (e.g., {a, b, 0, 1})
+            # Propagate unified alphabet down to all children first so all partial DFAs share the same symbol space
             full_alphabet = spec.alphabet or ['0', '1']
 
             # Force all direct children to inherit the unified alphabet
