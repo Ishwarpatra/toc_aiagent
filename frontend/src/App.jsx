@@ -138,6 +138,9 @@ Examples:
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyPress}
               />
+              <p className="prompt-hint">
+                Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to generate
+              </p>
 
               <button
                 className="generate-btn"
