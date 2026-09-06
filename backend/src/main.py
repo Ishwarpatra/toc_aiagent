@@ -40,6 +40,7 @@ class DFAGeneratorSystem:
         # Safety threshold for product/DFA combination operations (configurable)
         self.max_product_states = int(max_product_states)
         self.max_retries = 3
+        self._closed = False  # Guard against double-close
         logger.info(f"--- System Initialized: model={model_name} max_product_states={self.max_product_states} ---")
 
     def __enter__(self) -> 'DFAGeneratorSystem':
@@ -66,6 +67,9 @@ class DFAGeneratorSystem:
         CRITICAL: Explicitly close diskcache to flush WAL buffer to disk.
         Must be called before process exit to prevent cache data loss.
         """
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
         try:
             self.architect.cache.close()
             logger.debug("[Cache] diskcache flushed and closed")
@@ -73,7 +77,7 @@ class DFAGeneratorSystem:
             logger.warning(f"[Cache] Failed to close: {e}")
 
     def __del__(self):
-        """Destructor ensures cache is closed when object is garbage collected."""
+        """Destructor closes cache only if not already closed by context manager."""
         self.close()
 
     def export_to_json(self, dfa: DFA, filename: str = 'dfa_result') -> str:
@@ -217,10 +221,10 @@ if __name__ == "__main__":
     parser.add_argument("--no-export", action="store_true", help="Disable JSON file export")
     args = parser.parse_args()
 
-    system = DFAGeneratorSystem(model_name=args.model, max_product_states=args.max_product_states)
-
-    if args.prompt:
-        system.run(args.prompt, export_json=not args.no_export)
-    else:
-        # Interactive example
-        system.run("Design a DFA that accepts strings that start with 'a' or end with 'b'")
+    # Use context manager to ensure diskcache WAL is flushed on exit
+    with DFAGeneratorSystem(model_name=args.model, max_product_states=args.max_product_states) as system:
+        if args.prompt:
+            system.run(args.prompt, export_json=not args.no_export)
+        else:
+            # Interactive example
+            system.run("Design a DFA that accepts strings that start with 'a' or end with 'b'")
