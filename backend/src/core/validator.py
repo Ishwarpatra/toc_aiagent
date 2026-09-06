@@ -116,27 +116,30 @@ class DeterministicValidator:
             try:
                 n = int(t)
                 result = len(s) == n
-            except:
+            except (ValueError, TypeError):
                 result = False
         elif lt == "MIN_LENGTH":
             try:
-                n = int(t); result = len(s) >= n
-            except:
+                n = int(t)
+                result = len(s) >= n
+            except (ValueError, TypeError):
                 result = False
         elif lt == "MAX_LENGTH":
             try:
-                n = int(t); result = len(s) <= n
-            except:
+                n = int(t)
+                result = len(s) <= n
+            except (ValueError, TypeError):
                 result = False
         elif lt == "LENGTH_MOD":
             try:
                 r_str, k_str = t.split(":")
                 r, k = int(r_str), int(k_str)
                 result = (len(s) % k == r % k)
-            except:
+            except (ValueError, TypeError, AttributeError):
                 result = False
         elif lt == "COUNT_MOD":
-            # Accept both "symbol:r:k" and "symbol:k:r" encodings to be permissive.
+            # Supports both "symbol:r:k" and "symbol:k:r" encodings for permissiveness.
+            # First try sym:r:k (count of sym mod k == r), then swap k and r.
             try:
                 parts = t.split(":")
                 if len(parts) == 3:
@@ -145,12 +148,12 @@ class DeterministicValidator:
                     if (s.count(sym) % k) == (r % k):
                         result = True
                     else:
-                        sym2, k_str2, r_str2 = parts
-                        k2, r2 = int(k_str2), int(r_str2)
-                        result = (s.count(sym2) % k2) == (r2 % k2)
+                        # Try alternate ordering: sym:k:r (swap divisor and remainder)
+                        k2, r2 = int(r_str), int(k_str)  # k2=original r_str, r2=original k_str
+                        result = k2 != 0 and (s.count(sym) % k2) == (r2 % k2)
                 else:
                     result = False
-            except Exception:
+            except (ValueError, ZeroDivisionError, AttributeError):
                 result = False
         elif lt == "PRODUCT_EVEN":
             try:
@@ -167,12 +170,12 @@ class DeterministicValidator:
         elif lt == "ODD_COUNT":
             try:
                 result = s.count(t) % 2 != 0
-            except:
+            except (TypeError, AttributeError):
                 result = False
         elif lt == "EVEN_COUNT":
             try:
                 result = s.count(t) % 2 == 0
-            except:
+            except (TypeError, AttributeError):
                 result = False
         else:
             logger.debug(f"Unknown logic type: {lt}")
