@@ -9,7 +9,7 @@ import io
 import json
 import base64
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, PropertyMock
 from fastapi.testclient import TestClient
 
 from core.models import DFA
@@ -208,7 +208,16 @@ class TestReverseEngineerEndpoint(unittest.TestCase):
 
 class TestProviders(unittest.TestCase):
     def test_gemini_provider(self):
-        with patch("google.generativeai.configure") as mock_conf:
+        mock_google = MagicMock()
+        mock_genai = MagicMock()
+        mock_google.generativeai = mock_genai
+        mock_instance = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = '```json\n{"states": ["q0"], "alphabet": ["0"], "transitions": {"q0": {"0": "q0"}}, "start_state": "q0", "accept_states": ["q0"]}\n```'
+        mock_instance.generate_content.return_value = mock_response
+        mock_genai.GenerativeModel.return_value = mock_instance
+
+        with patch.dict("sys.modules", {"google": mock_google, "google.generativeai": mock_genai}):
             from core.providers import GeminiProvider
             prov = GeminiProvider("fake_key")
             models = prov.get_models()
@@ -216,22 +225,23 @@ class TestProviders(unittest.TestCase):
             self.assertTrue(prov.is_rate_limit_daily(Exception("429 ResourceExhausted: quota exceeded")))
             self.assertFalse(prov.is_rate_limit_daily(Exception("500 Internal error")))
 
-            # Mock GenerativeModel class and instance
-            mock_model_cls = MagicMock()
-            mock_instance = MagicMock()
-            mock_response = MagicMock()
-            mock_response.text = '```json\n{"states": ["q0"], "alphabet": ["0"], "transitions": {"q0": {"0": "q0"}}, "start_state": "q0", "accept_states": ["q0"]}\n```'
-            mock_instance.generate_content.return_value = mock_response
-            mock_model_cls.return_value = mock_instance
-            prov.genai.GenerativeModel = mock_model_cls
-
             res = prov.call("models/gemini-2.0-flash", "sys prompt", "user text", "AAAA")
             self.assertEqual(res["start_state"], "q0")
 
     def test_openrouter_provider(self):
-        with patch("openai.OpenAI") as mock_openai:
-            mock_client = MagicMock()
-            mock_openai.return_value = mock_client
+        mock_openai_module = MagicMock()
+        mock_openai_cls = MagicMock()
+        mock_client = MagicMock()
+        mock_openai_cls.return_value = mock_client
+        mock_openai_module.OpenAI = mock_openai_cls
+
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = '{"states": ["q0"], "alphabet": ["0"], "transitions": {"q0": {"0": "q0"}}, "start_state": "q0", "accept_states": []}'
+        mock_completion.choices = [mock_choice]
+        mock_client.chat.completions.create.return_value = mock_completion
+
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
             from core.providers import OpenRouterProvider
             prov = OpenRouterProvider("fake_key")
             models = prov.get_models()
@@ -239,12 +249,6 @@ class TestProviders(unittest.TestCase):
             self.assertTrue(prov.is_rate_limit_daily(Exception("429 rate limit reached")))
             self.assertTrue(prov.is_rate_limit_daily(Exception("402 insufficient funds")))
             self.assertFalse(prov.is_rate_limit_daily(Exception("500 server error")))
-
-            mock_completion = MagicMock()
-            mock_choice = MagicMock()
-            mock_choice.message.content = '{"states": ["q0"], "alphabet": ["0"], "transitions": {"q0": {"0": "q0"}}, "start_state": "q0", "accept_states": []}'
-            mock_completion.choices = [mock_choice]
-            mock_client.chat.completions.create.return_value = mock_completion
 
             res = prov.call("openai/gpt-4o", "sys", "user", "AAAA")
             self.assertEqual(res["start_state"], "q0")
