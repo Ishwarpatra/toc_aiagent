@@ -10,6 +10,7 @@ Security features:
   - Optional API key authentication (set API_KEY env var to enable)
 """
 
+import json
 import re
 import time
 import traceback
@@ -26,7 +27,7 @@ from pydantic import BaseModel, field_validator, ValidationError as PydanticVali
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 # Configure logging
 logging.basicConfig(
@@ -97,8 +98,13 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown
+    # Shutdown — call close() first to flush diskcache WAL before nulling reference
     logger.info("Shutting down DFA Generator System...")
+    if app.state.system is not None:
+        try:
+            app.state.system.close()
+        except Exception as exc:
+            logger.warning(f"Error during system shutdown: {exc}")
     app.state.system = None
 
 
@@ -121,14 +127,16 @@ ALLOWED_ORIGINS = os.environ.get(
     "http://localhost:5173,http://localhost:3000"
 ).split(",")
 
-# In development, you might want to allow all origins
-if os.environ.get("ENVIRONMENT") == "development":
+# In development, allow all origins but WITHOUT credentials
+# (CORS spec forbids allow_credentials=True with wildcard origin)
+IS_DEV = os.environ.get("ENVIRONMENT") == "development"
+if IS_DEV:
     ALLOWED_ORIGINS = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=not IS_DEV,  # Credentials incompatible with wildcard
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -136,7 +144,14 @@ app.add_middleware(
 
 # --- Input Sanitization Constants ---
 MAX_PROMPT_LENGTH = 500
+# Regex patterns for prompt injection hardening
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+# LLM role-override tokens common in Ollama/Llama/Qwen/Mistral model formats
+_INJECTION_TOKEN_RE = re.compile(
+    r"<\|im_start\|>|<\|im_end\|>|\[INST\]|\[/INST\]|<s>|</s>"
+    r"|<<SYS>>|<</SYS>>|\[SYSTEM\]|\[USER\]|\[ASSISTANT\]",
+    re.IGNORECASE
+)
 
 
 # --- Request/Response Models ---
@@ -154,8 +169,12 @@ class QueryRequest(BaseModel):
             raise ValueError("Prompt cannot be empty.")
         if len(v) > MAX_PROMPT_LENGTH:
             raise ValueError(f"Prompt exceeds maximum length of {MAX_PROMPT_LENGTH} characters.")
-        # Strip control characters
+        # Strip C0 control characters
         v = _CONTROL_CHAR_RE.sub("", v)
+        # Collapse injection-style blank-line padding (>2 consecutive newlines -> 2)
+        v = re.sub(r"\n{3,}", "\n\n", v)
+        # Strip LLM role-override tokens that could hijack the system prompt
+        v = _INJECTION_TOKEN_RE.sub("", v).strip()
         return v
 
 
@@ -342,13 +361,15 @@ async def generate_dfa(request: Request, query: QueryRequest):
         )
         
     except Exception as e:
-        # Unexpected errors - log full traceback
+        # Unexpected errors - log full traceback but don't expose internals to client
         logger.error(f"[API] Unexpected error: {str(e)}")
         logger.error(traceback.format_exc())
+        # In production, hide raw exception detail to avoid information leakage
+        client_msg = str(e) if IS_DEV else "An unexpected error occurred."
         raise HTTPException(
             status_code=500,
             detail={
-                "error": f"Internal server error: {str(e)}",
+                "error": f"Internal server error: {client_msg}",
                 "error_type": "RuntimeError",
                 "hint": "An unexpected error occurred. Check server logs for details."
             }
@@ -370,9 +391,6 @@ async def export_json(request: Request, query: QueryRequest):
         dfa_obj = system.architect.design(spec)
         is_valid, error_msg = system.validator.validate(dfa_obj, spec)
 
-        import json
-        from starlette.responses import Response
-
         content = json.dumps({
             "valid": is_valid,
             "dfa": dfa_obj.model_dump(),
@@ -387,7 +405,8 @@ async def export_json(request: Request, query: QueryRequest):
     except LLMConnectionError as e:
         raise HTTPException(status_code=503, detail={"error": str(e), "error_type": "ServiceUnavailable"})
     except Exception as e:
-        raise HTTPException(status_code=500, detail={"error": str(e), "error_type": "RuntimeError"})
+        client_msg = str(e) if IS_DEV else "Export failed."
+        raise HTTPException(status_code=500, detail={"error": client_msg, "error_type": "RuntimeError"})
 
 
 @app.post("/export/dot", dependencies=[Depends(verify_api_key)])
@@ -427,7 +446,6 @@ async def export_dot(request: Request, query: QueryRequest):
         lines.append("}")
         dot_content = "\n".join(lines)
 
-        from starlette.responses import Response
         return Response(
             content=dot_content,
             media_type="text/vnd.graphviz",
@@ -436,7 +454,8 @@ async def export_dot(request: Request, query: QueryRequest):
     except LLMConnectionError as e:
         raise HTTPException(status_code=503, detail={"error": str(e), "error_type": "ServiceUnavailable"})
     except Exception as e:
-        raise HTTPException(status_code=500, detail={"error": str(e), "error_type": "RuntimeError"})
+        client_msg = str(e) if IS_DEV else "Export failed."
+        raise HTTPException(status_code=500, detail={"error": client_msg, "error_type": "RuntimeError"})
 
 
 @app.get("/")
@@ -444,7 +463,7 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "Auto-DFA API",
-        "version": "1.1.0",
+        "version": "1.0.0",
         "description": "AI-Powered DFA Generator",
         "endpoints": {
             "/health": "Health check (GET)",
