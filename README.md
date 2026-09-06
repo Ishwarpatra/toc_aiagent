@@ -1,230 +1,213 @@
-# Auto-DFA: AI-Powered DFA Generator
+# Auto-DFA: Deterministic Finite Automaton Generator
 
-Auto-DFA is an intelligent system that translates natural language descriptions (e.g., "strings ending in '01'") into fully functional and visualized Deterministic Finite Automata (DFA). It uses a multi-agent architecture with specialized AI agents for analysis and design, backed by a deterministic validation engine.
+Auto-DFA is a neuro-symbolic framework for formal language theory and automata computation. It provides bidirectional translation between natural language, Deterministic Finite Automata (DFA), Right-Linear Regular Grammars, and visual state diagrams.
 
-## Features
+---
 
-* **Natural Language to DFA**: Describe your logic in plain English.
-* **AI Agent Architecture**: Utilizes an **Analyst Agent** for requirement extraction and an **Architect Agent** for state-machine design.
-* **Deterministic Validation**: Every generated DFA is checked against the original specifications for correctness.
-* **DFA Optimizer**: Automatically removes unreachable and non-productive states for clean, minimal DFAs.
-* **Responsive Visualization**: Real-time rendering of DFA diagrams using Mermaid.js, optimized for any screen size.
-* **Flexible UI**: A modern, mobile-friendly interface with a dedicated question area and toolbar.
+## Capabilities
 
-## Architecture
+* **Natural Language to DFA (Forward Pipeline)**: Translates plain English specifications (e.g. "strings ending in '01'", "even number of 1s and divisible by 3") into validated, minimal state machines.
+* **Image to Grammar & Language (Reverse Pipeline)**: Ingests uploaded DFA diagram images, parses graph structure into strict schemas, derives formal Right-Linear Regular Grammars ($S \to aA, A \to \varepsilon$), and synthesizes natural language descriptions.
+* **Multi-Agent Neuro-Symbolic Architecture**: Separates statistical AI perception from exact mathematical computation (DeterministicValidator, GrammarBuilder, DFAOptimizer).
+* **Deterministic Minimization & Composition**: Performs Hopcroft/BFS minimization, product construction (AND/OR/NOT), and truth oracle verification.
+* **Interactive Visualization**: Real-time SVG rendering with zoom, pan, touch gestures, and Graphviz DOT / JSON export formats.
+
+---
+
+## Bidirectional Pipeline Architecture
 
 ```
-+------------------+         HTTP POST         +-------------------+
-|   React Frontend | ---------------------->   |   FastAPI Backend |
-|   (port 5173)    |    /generate endpoint     |   (port 8000)     |
-|                  | <----------------------   |                   |
-|   App.jsx        |    JSON Response          |   api.py          |
-|   Canvas.jsx     |    (DFA states/edges)     |      v            |
-+------------------+                           | DFAGeneratorSystem|
-                                               |      v            |
-                                               |   Ollama LLM      |
-                                               +-------------------+
+=== Forward Pipeline: Natural Language to DFA ===
+[User Prompt] 
+      │
+      ▼
+AnalystAgent ──► LogicSpec (AST) ──► ArchitectAgent ──► DFA Model
+                                                          │
+                                                          ▼
+                                                DeterministicValidator
+                                                          │
+                                                          ▼
+                                                     DFAOptimizer
+
+=== Reverse Pipeline: Diagram Image to Grammar & Language ===
+[Diagram Image]
+      │
+      ▼
+VisionAgent (Multimodal VLM) ──► DeterministicValidator (Structure Check)
+      │
+      ▼
+GrammarBuilder (Deterministic Math: S -> aA, A -> ε)
+      │
+      ▼
+DescriberAgent (Natural Language Synthesis)
 ```
+
+---
 
 ## Project Structure
 
 ```
 toc_aiagent/
-├── README.md                       # This file
-├── docker-compose.yml              # Full-stack Docker orchestration
-├── .github/workflows/qa.yml        # CI pipeline
+├── README.md                       # Project overview and quick start
+├── DESIGN.md                       # Design tokens, palette, and style direction
+├── docker-compose.yml              # Docker orchestration (V2 compatible)
+├── .github/workflows/qa.yml        # CI test workflow
 │
-├── docs/                           # 📖 All documentation
-│   ├── architecture.md             # System design & agent pipeline
+├── docs/                           # Architecture and operational guides
+│   ├── architecture.md             # System design & bidirectional pipelines
 │   ├── deployment.md               # Production deployment guide
-│   ├── testing.md                  # Testing strategy & coverage
-│   ├── contributing.md             # Contribution guidelines
-│   ├── changelog.md                # Version history & roadmap
-│   └── commit_history.md           # Detailed commit log
+│   ├── testing.md                  # Test suites and QA oracle framework
+│   ├── changelog.md                # Version history and milestone logs
+│   └── commit_history.md           # Repository commit record
 │
 ├── backend/
-│   ├── src/                        # 🐍 Python backend (FastAPI)
-│   │   ├── api.py                  # REST API server
-│   │   ├── main.py                 # DFA generator orchestrator
-│   │   ├── core/                   # Core engine modules
-│   │   │   ├── models.py           # Pydantic: LogicSpec, DFA
-│   │   │   ├── agents.py           # AnalystAgent, ArchitectAgent
-│   │   │   ├── validator.py        # Deterministic DFA validator
-│   │   │   ├── repair.py           # LLM-based DFA repair engine
-│   │   │   ├── optimizer.py        # State minimization (BFS/DFS)
-│   │   │   ├── product.py          # Product construction (AND/OR/NOT)
-│   │   │   ├── oracle.py           # Test oracle for QA
-│   │   │   ├── normalizer.py       # Prompt normalization
-│   │   │   └── pattern_parser.py   # Pattern parsing utilities
-│   │   ├── tests/                  # Unit & integration tests
-│   │   ├── requirements.txt        # Production dependencies
-│   │   └── requirements-dev.txt    # Dev/test dependencies
-│   ├── qa/                         # QA & batch verification scripts
-│   │   ├── batch_verify.py         # Batch DFA verification
-│   │   ├── generate_tests.py       # Test case generator
-│   │   ├── run_qa_pipeline.py      # Full QA pipeline
-│   │   ├── data/                   # CSV test data files
-│   │   ├── debug/                  # Debug-only scripts
-│   │   └── output/                 # Generated reports & logs
-│   └── config/                     # Pattern configs (YAML/JSON)
+│   ├── src/                        # FastAPI service and core engines
+│   │   ├── api.py                  # REST API server (/generate, /reverse-engineer, /health)
+│   │   ├── main.py                 # DFAGeneratorSystem orchestrator & lifecycle manager
+│   │   ├── core/                   # Mathematical and agent modules
+│   │   │   ├── models.py           # Pydantic schemas: LogicSpec, DFA
+│   │   │   ├── grammar.py          # DFA to Right-Linear Grammar engine
+│   │   │   ├── providers.py        # Gemini and OpenRouter vision providers
+│   │   │   ├── agents.py           # Analyst, Architect, Vision, and Describer agents
+│   │   │   ├── validator.py        # Graph integrity and semantic validation
+│   │   │   ├── repair.py           # LLM-guided auto-repair engine
+│   │   │   ├── optimizer.py        # State minimization (unreachable/dead state removal)
+│   │   │   ├── product.py          # Product construction for AND/OR/NOT
+│   │   │   ├── oracle.py           # Ground-truth test oracle
+│   │   │   ├── normalizer.py       # Prompt pre-processing and synonym mapping
+│   │   │   └── pattern_parser.py   # Atomic logic regex extractor
+│   │   └── tests/                  # 421 unit and integration tests
+│   └── requirements.txt            # Python dependencies
 │
-├── frontend/                       # ⚛️ React + Vite frontend
-│   ├── src/
-│   │   ├── App.jsx                 # Main application
-│   │   ├── components/
-│   │   │   ├── Canvas.jsx          # DFA visualization (SVG)
-│   │   │   └── ErrorBoundary.jsx   # Error handling wrapper
-│   │   └── *.css                   # Styles
-│   └── package.json
-│
-└── scripts/                        # 🔧 Dev utility scripts
-    └── install-hooks.ps1           # Git hook installer
+└── frontend/                       # React + Vite client interface
+    ├── src/
+    │   ├── App.jsx                 # Main application UI
+    │   ├── App.css                 # Component layout and styling
+    │   ├── index.css               # WCAG 2.1 AA design tokens
+    │   └── components/
+    │       ├── Canvas.jsx          # SVG visualization with pan and zoom
+    │       └── ErrorBoundary.jsx   # Error fallback container
+    └── package.json
 ```
 
-### Core Modules
+---
+
+## Core Modules
 
 | Module | Location | Description |
-|--------|----------|-------------|
-| `api.py` | `backend/src/` | FastAPI server — `/generate`, `/health`, `/export/*` endpoints |
-| `main.py` | `backend/src/` | `DFAGeneratorSystem` orchestrating the pipeline |
-| `agents.py` | `backend/src/core/` | AnalystAgent (NL → LogicSpec) + ArchitectAgent (LogicSpec → DFA) |
-| `models.py` | `backend/src/core/` | Pydantic models for `LogicSpec` and `DFA` |
-| `repair.py` | `backend/src/core/` | LLM-based auto-repair for failed validations |
-| `optimizer.py` | `backend/src/core/` | Removes unreachable/non-productive states |
-| `validator.py` | `backend/src/core/` | Deterministic validation against test cases |
-| `product.py` | `backend/src/core/` | Product construction for AND/OR/NOT operations |
+| :--- | :--- | :--- |
+| `api.py` | `backend/src/` | REST endpoints: `/generate`, `/reverse-engineer`, `/export/*`, `/oracle/verify` |
+| `grammar.py` | `backend/src/core/` | Right-Linear Regular Grammar builder ($S \to aA, A \to \varepsilon$) |
+| `providers.py` | `backend/src/core/` | Unified multimodal vision providers (Gemini, OpenRouter) |
+| `agents.py` | `backend/src/core/` | Analyst, Architect, Vision, and Describer agent implementations |
+| `validator.py` | `backend/src/core/` | Graph structural validation and truth simulation |
+| `optimizer.py` | `backend/src/core/` | State minimization and reachability analysis |
+| `product.py` | `backend/src/core/` | Product automata construction for boolean composition |
+| `repair.py` | `backend/src/core/` | Fault localization and repair routines for generated automata |
 
-## Tech Stack
+---
 
-### Frontend
-* **Framework**: React (Vite)
-* **Visualization**: Mermaid.js
-* **Icons**: Lucide-React
-* **Styling**: Flexbox-based responsive CSS
+## Quick Start
 
-### Backend
-* **Language**: Python 3.x
-* **API Framework**: FastAPI
-* **LLM**: Ollama (qwen2.5-coder:1.5b)
-* **Data Validation**: Pydantic
-* **Logic Engine**: Custom multi-agent system (Analyst, Architect, Validator)
-
-## Getting Started
-
-### 1. Prerequisites
-* Node.js and npm
-* Python 3.10+
-* [Ollama](https://ollama.ai/) with `qwen2.5-coder:1.5b` model
-* Graphviz (optional, for local CLI visualization)
-
-### 2. Backend Setup
-
-Navigate to the backend directory and install dependencies:
+### 1. Backend Setup
 
 ```bash
 cd backend/src
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Start Ollama (if not already running):
+Run the backend development server:
+
 ```bash
-ollama serve
+uvicorn api:app --reload --port 8000
 ```
 
-Start the FastAPI server:
-```bash
-python api.py
-```
-
-The backend will run at http://localhost:8000.
-
-### 3. Frontend Setup
-
-Navigate to the frontend directory and install dependencies:
+### 2. Frontend Setup
 
 ```bash
 cd frontend
 npm install
-```
-
-Start the development server:
-
-```bash
 npm run dev
 ```
 
-Open your browser to http://localhost:5173.
+The frontend will be available at `http://localhost:5173`.
 
-## Usage
+---
 
-1. Enter a DFA description in the **Question Area** at the top:
-   - `"ends with a"` or `"ends with 'a'"`
-   - `"contains '01'"`
-   - `"starts with a or ends with b"`
-   - `"even number of 1s"`
-   - `"divisible by 3"`
+## API Reference
 
-2. Click the **Play** button at the bottom.
+### 1. `POST /generate`
+Generate a DFA from a natural language prompt.
 
-3. The system will:
-   - Analyze the prompt (Analyst Agent)
-   - Design the state machine (Architect Agent)
-   - Optimize the DFA (remove unreachable states)
-   - Validate against test cases
-   - Display the diagram on the Canvas
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check - returns system status |
-| `/generate` | POST | Generate DFA from prompt |
-
-### Example Request
-
-```bash
-curl -X POST http://localhost:8000/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "ends with a"}'
+**Request:**
+```json
+{
+  "prompt": "strings over {0,1} ending in 01"
+}
 ```
 
-### Example Response
-
+**Response (200 OK):**
 ```json
 {
   "valid": true,
-  "message": "DFA generated successfully",
   "dfa": {
-    "states": ["q0", "q1"],
-    "alphabet": ["a", "b"],
-    "start_state": "q0",
-    "accept_states": ["q1"],
+    "states": ["q0", "q1", "q2"],
+    "alphabet": ["0", "1"],
     "transitions": {
-      "q0": {"a": "q1", "b": "q0"},
-      "q1": {"a": "q1", "b": "q0"}
-    }
+      "q0": {"0": "q1", "1": "q0"},
+      "q1": {"0": "q1", "1": "q2"},
+      "q2": {"0": "q1", "1": "q0"}
+    },
+    "start_state": "q0",
+    "accept_states": ["q2"]
   },
-  "spec": {
-    "logic_type": "ENDS_WITH",
-    "target": "a",
-    "alphabet": ["a", "b"]
+  "metrics": {
+    "state_count": 3,
+    "transition_count": 6
   }
 }
 ```
 
-## DFA Optimizer
+### 2. `POST /reverse-engineer`
+Upload a DFA state diagram image to extract its model, grammar, and description.
 
-The optimizer module (`core/optimizer.py`) ensures clean, minimal DFAs by:
+**Request:** `multipart/form-data` with `file=@diagram.png`
 
-1. **Finding Reachable States**: BFS from start state
-2. **Finding Productive States**: Reverse BFS from accept states
-3. **Computing Useful States**: Intersection of reachable ∩ productive
-4. **Removing Dead States**: Only keeps `q_dead` if actually needed for completeness
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "valid": true,
+  "dfa": {
+    "states": ["q0", "q1"],
+    "alphabet": ["0", "1"],
+    "transitions": {
+      "q0": {"0": "q0", "1": "q1"},
+      "q1": {"0": "q0", "1": "q1"}
+    },
+    "start_state": "q0",
+    "accept_states": ["q1"]
+  },
+  "grammar": {
+    "S": ["0S", "1A"],
+    "A": ["0S", "1A", ""]
+  },
+  "grammar_formatted": "Start symbol: S\nProductions:\n  S -> 0S | 1A\n  A -> 0S | 1A | ε",
+  "description": "Accepts binary strings ending with 1."
+}
+```
 
-Example optimization:
-- Before: `['q0', 'q1', 'q_dead']` (3 states)
-- After: `['q0', 'q1']` (2 states) - orphaned dead state removed
+---
 
-## License
+## Testing
 
-MIT License
+Run the full pytest suite:
+
+```bash
+cd backend/src
+python -m pytest tests/ -v
+```
+
+**Test suite result:** `421 passed in 6.95s`
