@@ -191,7 +191,9 @@ Chronological record of all git commits and branches from repository inception t
 - `17aa381` `docs: sync commit_history.md with latest documentation commits` - Ishwarpatra
 - `1b26e84` `fix(ci): add python-multipart to backend requirements for upload routes` - Ishwarpatra
 - `0422510` `test(coverage): add unit tests for models and validation to achieve 82% coverage` - Ishwarpatra
+- `97754f6` `docs: update commit_history.md with CI dependency and coverage fixes` - Ishwarpatra
+- `a4a0dab` `fix(tests): mock optional vision cloud provider imports for CI runner environments` - Ishwarpatra
 
 ---
 
-*Total: 113 commits recorded across all branches (Dec 2025 - Sep 2026)*
+*Total: 115 commits recorded across all branches (Dec 2025 - Sep 2026)*
