@@ -135,19 +135,19 @@ def estimate_states_for_spec(spec: LogicSpec) -> int:
     if lt == "DIVISIBLE_BY":
         try:
             return max(2, int(t))
-        except:
+        except (ValueError, TypeError):
             return 10
     if lt in ("LENGTH_MOD",):
         try:
             k = int(t.split(":")[-1])
             return max(2, k)
-        except:
+        except (ValueError, TypeError, IndexError):
             return 10
     if lt == "COUNT_MOD":
         try:
             k = int(t.split(":")[-1])
             return max(2, k)
-        except:
+        except (ValueError, TypeError, IndexError):
             return 10
     if lt == "PRODUCT_EVEN":
         return 2

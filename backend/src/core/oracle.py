@@ -27,11 +27,13 @@ def check_condition(s: str, op_type: str, pattern: str, alphabet: List[str]) -> 
     elif op_type == "EXACT_LENGTH":
         try:
             return len(s) == int(pattern)
-        except:
+        except (ValueError, TypeError):
             return False
     elif op_type == "DIVISIBLE_BY":
         try:
             n = int(pattern)
+            if n == 0:
+                return False
             if set(alphabet) == set(['0', '1']):
                 val = int(s, 2) if s else 0
             else:
@@ -42,7 +44,7 @@ def check_condition(s: str, op_type: str, pattern: str, alphabet: List[str]) -> 
                     digit = mapping.get(char, 0)
                     val = val * len(alphabet) + digit
             return val % n == 0
-        except:
+        except (ValueError, TypeError, ZeroDivisionError):
             return False
     elif op_type == "EVEN_COUNT":
         return s.count(pattern) % 2 == 0
@@ -109,14 +111,16 @@ def get_oracle_strings(op_type: str, pattern: str, alphabet: List[str] = None) -
                             temp_val //= len(alphabet)
                         if num_str:
                             candidates.append(num_str)
-        except: pass
+        except (ValueError, TypeError, ZeroDivisionError):
+            pass
     elif op_type == "EXACT_LENGTH":
         try:
             n = int(pattern)
             candidates.append(alphabet[0] * n)
-            candidates.append(alphabet[0] * (n-1) if n > 0 else alphabet[0])
-            candidates.append(alphabet[0] * (n+1))
-        except: pass
+            candidates.append(alphabet[0] * (n - 1) if n > 0 else alphabet[0])
+            candidates.append(alphabet[0] * (n + 1))
+        except (ValueError, TypeError):
+            pass
 
     # 2. Random sampling
     for _ in range(40):
@@ -249,7 +253,7 @@ class CompositeOracleSolver:
                     # Pad the prefix to exact length
                     padding = alphabet[0] * (n - len(pat1))
                     results.append(pat1 + padding)
-            except:
+            except (ValueError, TypeError):
                 pass
 
         elif op1 == "EXACT_LENGTH" and op2 == "STARTS_WITH":
@@ -262,7 +266,7 @@ class CompositeOracleSolver:
                 if n >= len(pat1):
                     padding = alphabet[0] * (n - len(pat1))
                     results.append(padding + pat1)
-            except:
+            except (ValueError, TypeError):
                 pass
 
         elif op1 == "EXACT_LENGTH" and op2 == "ENDS_WITH":
@@ -276,7 +280,7 @@ class CompositeOracleSolver:
                     padding = alphabet[0] * (n - len(pat1))
                     # Place pattern in the middle
                     results.append(padding[:len(padding)//2] + pat1 + padding[len(padding)//2:])
-            except:
+            except (ValueError, TypeError):
                 pass
 
         elif op1 == "EXACT_LENGTH" and op2 == "CONTAINS":
