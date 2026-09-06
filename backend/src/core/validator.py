@@ -10,6 +10,32 @@ class DeterministicValidator:
     def __init__(self):
         pass
 
+    @staticmethod
+    def validate_structure(dfa: DFA) -> Tuple[bool, str]:
+        """
+        Validate that the DFA satisfies structural mathematical integrity constraints:
+        - start_state is in states
+        - accept_states is a subset of states
+        - all transition keys and target states belong to states
+        - all transition symbols belong to alphabet
+        """
+        if not dfa.states:
+            return False, "DFA states set cannot be empty."
+        if dfa.start_state not in dfa.states:
+            return False, f"Start state '{dfa.start_state}' is not in states set."
+        for acc in dfa.accept_states:
+            if acc not in dfa.states:
+                return False, f"Accept state '{acc}' is not in states set."
+        for state, transitions in dfa.transitions.items():
+            if state not in dfa.states:
+                return False, f"Transition source state '{state}' is not in states set."
+            for sym, dest in transitions.items():
+                if sym not in dfa.alphabet:
+                    return False, f"Transition symbol '{sym}' is not in alphabet."
+                if dest not in dfa.states:
+                    return False, f"Transition target state '{dest}' is not in states set."
+        return True, "Valid DFA structure"
+
     def validate(self, dfa: DFA, spec: LogicSpec) -> Tuple[bool, str]:
         """
         Simulate DFA on a set of generated test strings derived from spec and return (is_valid, message).
