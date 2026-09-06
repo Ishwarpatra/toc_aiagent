@@ -188,7 +188,10 @@ Chronological record of all git commits and branches from repository inception t
 - `e35bd34` `docs: update DEPLOYMENT with vision keys, QA paths, and clean phrasing` - Ishwarpatra
 - `f4736aa` `docs: update CONTRIBUTING with accurate test paths and architecture pipelines` - Ishwarpatra
 - `8b7a91c` `docs: update docs index table with all guide references` - Ishwarpatra
+- `17aa381` `docs: sync commit_history.md with latest documentation commits` - Ishwarpatra
+- `1b26e84` `fix(ci): add python-multipart to backend requirements for upload routes` - Ishwarpatra
+- `0422510` `test(coverage): add unit tests for models and validation to achieve 82% coverage` - Ishwarpatra
 
 ---
 
-*Total: 110 commits recorded across all branches (Dec 2025 - Sep 2026)*
+*Total: 113 commits recorded across all branches (Dec 2025 - Sep 2026)*
