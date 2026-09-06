@@ -1,5 +1,13 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 
+// Escape HTML special characters before injecting into SVG innerHTML (prevents XSS)
+const escapeHtml = (str) =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 // Color palette for nodes
 const NODE_COLORS = {
   start: { fill: "#7ec8e3", stroke: "#4a90d9", text: "#1a365d" },
@@ -16,6 +24,7 @@ export default function Canvas({ data, loading, error }) {
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.7 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [lastTouchPos, setLastTouchPos] = useState({ x: 0, y: 0 });
 
   // Reset transform when new data arrives
   useEffect(() => {
@@ -136,14 +145,21 @@ export default function Canvas({ data, loading, error }) {
     return `M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`;
   }, []);
 
-  // Handle Wheel Zoom
-  const handleWheel = (e) => {
-    if (!data?.dfa) return;
-    e.preventDefault();
-    const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.2, Math.min(3, transform.scale * scaleFactor));
-    setTransform(prev => ({ ...prev, scale: newScale }));
-  };
+  // Handle Wheel Zoom: registered via useEffect with {passive: false} to allow
+  // preventDefault() without the browser warning about passive listeners.
+  useEffect(() => {
+    const frame = containerRef.current;
+    if (!frame) return;
+    const onWheel = (e) => {
+      if (!data?.dfa) return;
+      e.preventDefault();
+      const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      const newScale = Math.max(0.2, Math.min(3, transform.scale * scaleFactor));
+      setTransform(prev => ({ ...prev, scale: newScale }));
+    };
+    frame.addEventListener("wheel", onWheel, { passive: false });
+    return () => frame.removeEventListener("wheel", onWheel);
+  }, [data, transform.scale]);
 
   // Handle Pan Start
   const handleMouseDown = (e) => {
@@ -167,6 +183,25 @@ export default function Canvas({ data, loading, error }) {
 
   // Handle Pan End
   const handleMouseUp = () => {
+    setIsPanning(false);
+  };
+
+  // Touch Pan: single-finger drag maps to pan
+  const handleTouchStart = (e) => {
+    if (!data?.dfa || e.touches.length !== 1) return;
+    setIsPanning(true);
+    setLastTouchPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isPanning || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - lastTouchPos.x;
+    const dy = e.touches[0].clientY - lastTouchPos.y;
+    setTransform(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+    setLastTouchPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+  };
+
+  const handleTouchEnd = () => {
     setIsPanning(false);
   };
 
@@ -199,7 +234,7 @@ export default function Canvas({ data, loading, error }) {
     let svgContent = "";
 
     // SVG Accessibility Title
-    const titleText = `DFA: ${states.length} states, start: ${start_state}, accept: ${accept_states.join(', ')}`;
+    const titleText = `DFA: ${states.length} states, start: ${escapeHtml(start_state)}, accept: ${accept_states.map(escapeHtml).join(', ')}`;
     svgContent += `<title>${titleText}</title>`;
 
     // SVG Definitions
@@ -262,6 +297,7 @@ export default function Canvas({ data, loading, error }) {
 
       // Edge label
       const label = symbols.join(", ");
+      const safeLabel = escapeHtml(label);  // Escape before injecting into SVG
       let labelX, labelY;
 
       if (isSelfLoop) {
@@ -280,7 +316,7 @@ export default function Canvas({ data, loading, error }) {
         labelY = midY + nx * (curvature + 35);
       }
 
-      const labelWidth = label.length * 11 + 20;
+      const labelWidth = safeLabel.length * 11 + 20;
       svgContent += `
         <rect 
           x="${labelX - labelWidth / 2}" y="${labelY - 14}" 
@@ -295,7 +331,7 @@ export default function Canvas({ data, loading, error }) {
           font-weight="900"
           font-family="Inter, system-ui, sans-serif"
           fill="#0f172a"
-        >${label}</text>
+        >${safeLabel}</text>
       `;
     });
 
@@ -353,7 +389,7 @@ export default function Canvas({ data, loading, error }) {
         <text x="${x}" y="${y + 6}" text-anchor="middle" 
               font-size="18" font-weight="800" 
               font-family="Inter, system-ui, sans-serif"
-              fill="${colors.text}">${state}</text>
+              fill="${colors.text}">${escapeHtml(state)}</text>
       `;
     });
 
@@ -405,8 +441,8 @@ export default function Canvas({ data, loading, error }) {
       <div className="canvas-container">
         <div className="canvas-frame">
           <div className="error-message">
-            <span className="error-icon">⚠</span>
-            <span>{error}</span>
+            <span className="error-icon" role="img" aria-label="Error">⚠</span>
+            <span><strong>Error:</strong> {error}</span>
           </div>
         </div>
       </div>
@@ -418,11 +454,13 @@ export default function Canvas({ data, loading, error }) {
     <div className="canvas-container" ref={containerRef}>
       <div
         className="canvas-frame"
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
       >
         <svg
@@ -469,6 +507,14 @@ export default function Canvas({ data, loading, error }) {
             <div className="dfa-info-item">
               <span className="dfa-info-label">Alphabet</span>
               <span className="dfa-info-value">{data.dfa.alphabet.join(", ")}</span>
+            </div>
+            <div className="dfa-info-item">
+              <span className="dfa-info-label">Accept States</span>
+              <span className="dfa-info-value" title={data.dfa.accept_states.join(", ")}>
+                {data.dfa.accept_states.length > 0
+                  ? data.dfa.accept_states.join(", ")
+                  : <em style={{color: 'var(--text-muted)', fontWeight: 400}}>none</em>}
+              </span>
             </div>
             <div className="dfa-info-item">
               <span className="dfa-info-label">Valid</span>
