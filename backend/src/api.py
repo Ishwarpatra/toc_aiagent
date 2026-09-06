@@ -12,15 +12,16 @@ Security features:
 
 import json
 import re
+import base64
 import time
 import traceback
 import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, List, Any
 
-from fastapi import FastAPI, HTTPException, Request, Depends, Security
+from fastapi import FastAPI, HTTPException, Request, Depends, Security, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, field_validator, ValidationError as PydanticValidationError
@@ -61,8 +62,9 @@ async def verify_api_key(api_key: Optional[str] = Security(api_key_header)):
 # Import the existing system from your main.py
 from main import DFAGeneratorSystem
 
-# Import custom exceptions for proper error handling
+# Import custom exceptions and reverse engineering components
 from core.repair import LLMConnectionError
+from core import GrammarBuilder, VisionAgent, DescriberAgent
 
 
 # --- Custom Exception Classes ---
@@ -189,6 +191,16 @@ class HealthResponse(BaseModel):
     system_initialized: bool
     message: str
     version: str = "1.0.0"
+
+
+class ReverseEngineerResponse(BaseModel):
+    success: bool
+    dfa: Optional[Dict[str, Any]] = None
+    grammar: Optional[Dict[str, List[str]]] = None
+    grammar_formatted: Optional[str] = None
+    description: Optional[str] = None
+    valid: bool = False
+    error: Optional[str] = None
 
 
 # --- Helper Functions ---
@@ -458,6 +470,94 @@ async def export_dot(request: Request, query: QueryRequest):
         raise HTTPException(status_code=500, detail={"error": client_msg, "error_type": "RuntimeError"})
 
 
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post("/reverse-engineer", response_model=ReverseEngineerResponse, dependencies=[Depends(verify_api_key)])
+@limiter.limit("10/minute")
+async def reverse_engineer_dfa(request: Request, file: UploadFile = File(...)):
+    """
+    Reverse Engineer a DFA from an uploaded state diagram image.
+
+    3-Phase Neuro-Symbolic Pipeline:
+    1. Perception (AI): VisionAgent parses image -> strict DFA model + DeterministicValidator.
+    2. Formalization (Deterministic Math): GrammarBuilder computes Right-Linear Regular Grammar.
+    3. Translation (AI): DescriberAgent translates DFA + Grammar into a natural language sentence.
+    """
+    if not file:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "No file uploaded", "error_type": "ValidationError"}
+        )
+
+    # Validate Content-Type
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": f"Unsupported image type: '{content_type}'. Allowed types: PNG, JPEG, WEBP.",
+                "error_type": "InvalidFileType"
+            }
+        )
+
+    try:
+        # Read file bytes into memory
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Uploaded image file is empty.", "error_type": "EmptyFile"}
+            )
+        if len(file_bytes) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail={"error": "Image file exceeds maximum allowed size of 10MB.", "error_type": "PayloadTooLarge"}
+            )
+
+        # Convert to base64
+        base64_img = base64.b64encode(file_bytes).decode("utf-8")
+
+        # Step 1: VisionAgent perception
+        vision_agent = VisionAgent()
+        dfa_obj = vision_agent.process_image(base64_img)
+
+        # Step 2: GrammarBuilder mathematical formalization
+        grammar = GrammarBuilder.build_from_dfa(dfa_obj)
+        grammar_formatted = GrammarBuilder.format_grammar(grammar)
+
+        # Step 3: DescriberAgent translation
+        describer_agent = DescriberAgent()
+        description = describer_agent.describe(dfa_obj, grammar)
+
+        return ReverseEngineerResponse(
+            success=True,
+            dfa=dfa_obj.model_dump(),
+            grammar=grammar,
+            grammar_formatted=grammar_formatted,
+            description=description,
+            valid=True
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        logger.warning(f"[API] Reverse engineering validation failed: {ve}")
+        raise HTTPException(
+            status_code=422,
+            detail={"error": str(ve), "error_type": "DFAValidationError"}
+        )
+    except Exception as e:
+        logger.error(f"[API] Reverse engineering failed: {e}")
+        logger.error(traceback.format_exc())
+        client_msg = str(e) if IS_DEV else "Failed to reverse engineer DFA diagram."
+        raise HTTPException(
+            status_code=500,
+            detail={"error": client_msg, "error_type": "RuntimeError"}
+        )
+
+
 @app.get("/")
 async def root():
     """Root endpoint with API information."""
@@ -468,6 +568,7 @@ async def root():
         "endpoints": {
             "/health": "Health check (GET)",
             "/generate": "Generate DFA from prompt (POST)",
+            "/reverse-engineer": "Reverse engineer DFA from image diagram (POST)",
             "/export/json": "Export DFA as JSON file (POST)",
             "/export/dot": "Export DFA as Graphviz DOT file (POST)",
             "/oracle/verify": "Oracle truth verification (POST)"
