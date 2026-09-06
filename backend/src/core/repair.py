@@ -8,6 +8,7 @@ the DFA structure based on validator feedback.
 
 import json
 import logging
+import os
 from typing import Optional, List, Dict, Any, Tuple
 
 from .models import DFA, LogicSpec
@@ -38,9 +39,14 @@ class DFARepairEngine:
         """
         try:
             import requests
-            
+
+            # Respect OLLAMA_URL env var (set by docker-compose to host.docker.internal)
+            ollama_url = os.environ.get(
+                "OLLAMA_URL", "http://localhost:11434/api/generate"
+            )
+
             response = requests.post(
-                "http://localhost:11434/api/generate",
+                ollama_url,
                 json={
                     "model": self.model_name,
                     "prompt": user_prompt,
@@ -69,6 +75,12 @@ class DFARepairEngine:
         """
         Parse LLM response into a valid DFA dictionary.
         """
+        # Cap response size: a valid DFA description never needs more than 50KB.
+        # Guards against memory exhaustion from a malfunctioning or compromised model.
+        if len(response) > 50_000:
+            logger.warning("[RepairEngine] LLM response exceeds 50KB size cap; truncating to prevent memory exhaustion")
+            response = response[:50_000]
+
         try:
             # Clean up typical LLM formatting
             cleaned = response.replace("```json", "").replace("```", "").strip()
@@ -90,6 +102,15 @@ class DFARepairEngine:
                 if field not in data:
                     logger.warning(f"[RepairEngine] Missing field: {field}")
                     return None
+
+            # Sanity-check field sizes before constructing the DFA object.
+            # A state machine with >200 states or >40K transitions is almost certainly malformed output.
+            if len(data.get("states", [])) > 200:
+                logger.warning("[RepairEngine] Parsed DFA has >200 states; rejecting as malformed")
+                return None
+            if len(data.get("transitions", {})) > 40_000:
+                logger.warning("[RepairEngine] Parsed DFA has >40K transitions; rejecting as malformed")
+                return None
             
             # Ensure alphabet is set correctly
             data["alphabet"] = alphabet
