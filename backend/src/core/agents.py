@@ -1,3 +1,4 @@
+import os
 import json
 import re
 import logging
@@ -6,6 +7,7 @@ from typing import List, Dict, Optional, Tuple, Any
 import diskcache as dc
 
 from .models import LogicSpec, DFA
+from .validator import DeterministicValidator
 
 logger = logging.getLogger(__name__)
 
@@ -1048,3 +1050,180 @@ class ArchitectAgent(BaseAgent):
         # As a last resort, return a trivial rejecting DFA
         states = ["q0"]
         return DFA(states=states, alphabet=a, transitions={"q0": {sym: "q0" for sym in a}}, start_state="q0", accept_states=[])
+
+
+class VisionAgent:
+    """
+    Vision-Language Agent that reads a DFA diagram image (base64)
+    and produces a mathematically valid Pydantic DFA instance.
+    """
+
+    def __init__(self, model: Optional[str] = None, providers: Optional[List[Any]] = None):
+        self.model_override = model
+        self.providers = list(providers) if providers is not None else []
+
+        if not self.providers:
+            # Auto-discover configured vision providers
+            gemini_key = os.environ.get("GEMINI_API_KEY")
+            if gemini_key:
+                try:
+                    from .providers import GeminiProvider
+                    self.providers.append(GeminiProvider(gemini_key.strip('"\' ')))
+                except Exception as e:
+                    logger.warning(f"[VisionAgent] Failed to init GeminiProvider: {e}")
+
+            or_key = os.environ.get("OPENROUTER_API_KEY")
+            if or_key:
+                try:
+                    from .providers import OpenRouterProvider
+                    self.providers.append(OpenRouterProvider(or_key.strip('"\' ')))
+                except Exception as e:
+                    logger.warning(f"[VisionAgent] Failed to init OpenRouterProvider: {e}")
+
+        self.system_prompt = (
+            "You are a specialist in automata theory.\n"
+            "Read the provided image of a DFA state diagram and output its formal representation in JSON format.\n"
+            "The JSON must strictly follow this structure:\n"
+            "{\n"
+            '    "states": ["q0", "q1", ...],\n'
+            '    "alphabet": ["0", "1", ...],\n'
+            '    "transitions": {\n'
+            '        "q0": {"0": "q0", "1": "q1"},\n'
+            "        ...\n"
+            "    },\n"
+            '    "start_state": "q0",\n'
+            '    "accept_states": ["q1", ...]\n'
+            "}\n"
+            "Only output the JSON string, no other text."
+        )
+
+    def process_image(self, base64_image: str) -> DFA:
+        """
+        Process a base64 encoded DFA image, query VLM, parse into DFA Pydantic model,
+        and validate structural integrity.
+        """
+        if not base64_image:
+            raise ValueError("Empty image data provided.")
+
+        last_error = None
+        for provider in self.providers:
+            models = [self.model_override] if self.model_override else provider.get_models()
+            for model_name in models:
+                try:
+                    dfa_data = provider.call(
+                        model_name, self.system_prompt, "Parse this DFA diagram.", base64_image
+                    )
+                    if isinstance(dfa_data, str):
+                        cleaned = dfa_data.replace("```json", "").replace("```", "").strip()
+                        dfa_data = json.loads(cleaned)
+
+                    dfa = DFA(**dfa_data)
+                    is_valid, msg = DeterministicValidator.validate_structure(dfa)
+                    if not is_valid:
+                        raise ValueError(f"DFA structural validation failed: {msg}")
+                    return dfa
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"[VisionAgent] provider={provider.__class__.__name__} model={model_name} failed: {e}"
+                    )
+
+        if last_error:
+            raise ValueError(f"Vision processing failed across all providers: {last_error}")
+        raise ValueError(
+            "No vision providers configured or available (set GEMINI_API_KEY or OPENROUTER_API_KEY)."
+        )
+
+
+class DescriberAgent:
+    """
+    Agent that reads a validated DFA and its Right-Linear Regular Grammar
+    and translates them into a single-sentence natural language description.
+    """
+
+    def __init__(self, model: Optional[str] = None, providers: Optional[List[Any]] = None):
+        self.model_override = model
+        self.providers = list(providers) if providers is not None else []
+
+        if not self.providers:
+            gemini_key = os.environ.get("GEMINI_API_KEY")
+            if gemini_key:
+                try:
+                    from .providers import GeminiProvider
+                    self.providers.append(GeminiProvider(gemini_key.strip('"\' ')))
+                except Exception as e:
+                    logger.warning(f"[DescriberAgent] Failed to init GeminiProvider: {e}")
+            or_key = os.environ.get("OPENROUTER_API_KEY")
+            if or_key:
+                try:
+                    from .providers import OpenRouterProvider
+                    self.providers.append(OpenRouterProvider(or_key.strip('"\' ')))
+                except Exception as e:
+                    logger.warning(f"[DescriberAgent] Failed to init OpenRouterProvider: {e}")
+
+        self.system_prompt = (
+            "You are an expert computer scientist. Read the following DFA state machine "
+            "and its associated Regular Grammar. In exactly one clear sentence, describe the language it accepts."
+        )
+
+    def describe(self, dfa: DFA, grammar: Dict[str, List[str]]) -> str:
+        """
+        Generate a single-sentence natural language description of the language.
+        """
+        prompt = (
+            f"DFA Structure:\n"
+            f"States: {dfa.states}\n"
+            f"Alphabet: {dfa.alphabet}\n"
+            f"Transitions: {dfa.transitions}\n"
+            f"Start State: {dfa.start_state}\n"
+            f"Accept States: {dfa.accept_states}\n\n"
+            f"Regular Grammar:\n"
+            f"{json.dumps(grammar, indent=2)}"
+        )
+
+        last_error = None
+        for provider in self.providers:
+            models = [self.model_override] if self.model_override else provider.get_models()
+            for model_name in models:
+                try:
+                    empty_b64 = (
+                        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+                    )
+                    res = provider.call(model_name, self.system_prompt, prompt, empty_b64)
+                    if isinstance(res, dict):
+                        if "description" in res:
+                            return str(res["description"])
+                        if "sentence" in res:
+                            return str(res["sentence"])
+                        for v in res.values():
+                            if isinstance(v, str) and len(v) > 5:
+                                return v
+                        return json.dumps(res)
+                    if isinstance(res, str) and res.strip():
+                        return res.strip()
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"[DescriberAgent] Provider call failed: {e}")
+
+        return self._heuristic_describe(dfa, grammar)
+
+    def _heuristic_describe(self, dfa: DFA, grammar: Dict[str, List[str]]) -> str:
+        """Deterministic description fallback based on automaton properties."""
+        if not dfa.accept_states:
+            return "The language that accepts no strings (empty language)."
+        if set(dfa.accept_states) == set(dfa.states):
+            return f"The language of all strings over alphabet {{{', '.join(sorted(dfa.alphabet))}}}."
+        if (
+            dfa.start_state in dfa.accept_states
+            and len(dfa.accept_states) == 1
+            and len(dfa.states) == 1
+        ):
+            return (
+                f"The language of all strings over alphabet {{{', '.join(sorted(dfa.alphabet))}}} "
+                f"including the empty string."
+            )
+
+        return (
+            f"A regular language over alphabet {{{', '.join(sorted(dfa.alphabet))}}} "
+            f"with {len(dfa.states)} states and {len(dfa.accept_states)} accept state(s)."
+        )
