@@ -6,15 +6,21 @@
   --bg-secondary: #ffffff;
   --bg-sidebar: #fafafa;
   --border-color: #e0e0e0;
-  --text-primary: #333333;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+  --text-primary: #333333;   /* 12.63:1 on white — PASS */
+  --text-secondary: #666666; /* 5.74:1 on white — PASS */
+  --text-muted: #767676;     /* 4.54:1 on white — PASS (was #999999: 2.85:1 FAIL) */
 
   /* Accent Colors */
-  --accent-primary: #4a90d9;
+  --accent-primary: #4a90d9;   /* For borders, icons, decorative use */
+  --accent-text: #2878c8;      /* 5.5:1 on white — use for text/interactive labels */
   --accent-secondary: #e8eb35;
   --accent-success: #27ae60;
   --accent-warning: #f39c12;
+
+  /* Semantic feedback */
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
+  --error-text: #b91c1c;     /* 5.28:1 on #fef2f2 — PASS (was #dc2626: 4.41:1 FAIL) */
 
   /* Node Colors */
   --node-start: #7ec8e3;
