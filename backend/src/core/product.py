@@ -234,12 +234,12 @@ class ProductConstructionEngine:
         """
         Invert a DFA (NOT logic) - swap accepting and non-accepting states.
         
-        CRITICAL FIX: Complete the DFA first to ensure all transitions exist.
-        Otherwise, strings with missing transitions are incorrectly handled.
+        The DFA must be completed first with all transitions defined across
+        the alphabet; otherwise, implicit rejects would fail to invert into accepts.
         """
         print(f"\n[Product Engine] Inverting DFA (NOT logic)...")
         
-        # CRITICAL: Complete DFA before inversion
+        # Complete transition table before state inversion
         completed_dfa = self.complete_dfa(dfa)
         
         new_accept_states = [s for s in completed_dfa.states if s not in completed_dfa.accept_states]
