@@ -18,6 +18,9 @@ on:
         required: false
         default: '50'
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+
 jobs:
   # ==========================================================================
   # Unit Tests - Fast feedback on core DFA logic
@@ -126,7 +129,7 @@ jobs:
             
             if [ "$ORACLE_FAILED" -gt 0 ]; then
               echo ""
-              echo "⚠️ ORACLE FAILURES DETECTED - Analyst may be misinterpreting prompts!"
+              echo "WARNING: ORACLE FAILURES DETECTED - Analyst may be misinterpreting prompts!"
               echo "Check failed_prompts_bank.csv for details."
             fi
           fi
@@ -134,7 +137,7 @@ jobs:
       - name: Fail if tests failed
         if: steps.qa.outcome == 'failure'
         run: |
-          echo "❌ QA Pipeline failed. Check artifacts for details."
+          echo "ERROR: QA Pipeline failed. Check artifacts for details."
           exit 1
   
   # ==========================================================================
