@@ -1,7 +1,7 @@
 import { Component } from "react";
 
 /**
- * ErrorBoundary — catches render errors in child components
+ * ErrorBoundary: catches render errors in child components
  * and displays a user-friendly fallback UI with a retry option.
  */
 export default class ErrorBoundary extends Component {
@@ -40,7 +40,7 @@ export default class ErrorBoundary extends Component {
                 textAlign: "center",
               }}
             >
-              <span style={{ fontSize: "48px" }}>⚠</span>
+              <span role="img" aria-label="Error" style={{ fontSize: "48px" }}>⚠</span>
               <span style={{ fontSize: "18px", fontWeight: 600, color: "#334155" }}>
                 Something went wrong
               </span>
@@ -55,7 +55,7 @@ export default class ErrorBoundary extends Component {
                   padding: "10px 24px",
                   borderRadius: "8px",
                   border: "none",
-                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  background: "linear-gradient(160deg, #1e2d4a, #2c3e6b)",
                   color: "white",
                   fontWeight: 600,
                   fontSize: "14px",
