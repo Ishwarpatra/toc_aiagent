@@ -31,7 +31,8 @@
 .sidebar-header {
   padding: 20px;
   border-bottom: 1px solid var(--border-color);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* Brand identity: deep navy conveys precision/logic; avoids the generic blue-purple training default (R-01) */
+  background: linear-gradient(160deg, #1e2d4a 0%, #2c3e6b 100%);
   color: white;
 }
 
@@ -102,12 +103,31 @@
 
 .prompt-textarea:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.15);
+  /* 60% opacity gives ~3:1 contrast ratio for focus indicator (R-32 fix; was 15% = invisible) */
+  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.6);
   outline: none;
 }
 
 .prompt-textarea::placeholder {
   color: var(--text-muted);
+}
+
+/* Keyboard shortcut hint below textarea */
+.prompt-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: -6px;
+}
+
+.prompt-hint kbd {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+  font-family: inherit;
+  color: var(--text-secondary);
 }
 
 /* ===== GENERATE BUTTON ===== */
@@ -172,9 +192,11 @@
 }
 
 .example-chip:hover {
-  background: #f0f4ff;
+  background: rgba(74, 144, 217, 0.08);
   border-color: var(--accent-primary);
-  color: var(--accent-primary);
+  /* Use --accent-text (5.5:1) not --accent-primary (3.34:1) for text on white (R-25 fix) */
+  color: var(--accent-text);
+  transform: translateX(2px);
 }
 
 /* ===== CANVAS AREA ===== */
@@ -259,10 +281,11 @@
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
   border-radius: 10px;
-  color: #dc2626;
+  /* --error-text (#b91c1c) achieves 5.28:1 on --error-bg (#fef2f2) — PASS (was #dc2626: 4.41:1 FAIL) */
+  color: var(--error-text);
   font-size: 0.95rem;
 }
 
@@ -398,6 +421,11 @@
 
   .main-workspace {
     flex-direction: column;
+  }
+
+  .canvas-container {
+    /* Prevent canvas from collapsing to 0 height in column-flex mobile layout (R-03 fix) */
+    min-height: 60vh;
   }
 
   .canvas-frame {
