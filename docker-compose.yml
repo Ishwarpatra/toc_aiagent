@@ -1,4 +1,4 @@
-version: '3.8'
+# Docker Compose V2 — 'version' key removed (deprecated, emits warnings in V2)
 
 services:
   # Backend API Service
