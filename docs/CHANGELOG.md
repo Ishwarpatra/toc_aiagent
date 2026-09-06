@@ -2,7 +2,22 @@
 
 All notable changes to Auto-DFA are documented here.
 
-## [1.1.0] - 2026-02-27
+## [1.2.0] - 2026-09-06
+
+### Added
+- **Reverse Engineering Pipeline**: 3-Phase neuro-symbolic engine converting diagram images to verified DFAs, Right-Linear Regular Grammars, and natural language descriptions.
+- **Grammar Engine (`core/grammar.py`)**: Mathematical `GrammarBuilder` computing formal Right-Linear Grammars ($S \to aA, A \to \varepsilon$) from DFAs.
+- **Multimodal Providers (`core/providers.py`)**: Unified VLM providers for Google Gemini and OpenRouter with rate-limit and quota handling.
+- **Agents (`core/agents.py`)**: `VisionAgent` for visual state extraction and `DescriberAgent` for language synthesis.
+- **API**: `POST /reverse-engineer` endpoint supporting `multipart/form-data` uploads (`PNG`, `JPEG`, `WEBP`) with 10MB limit and error handling.
+- **Testing**: Added `tests/test_grammar.py` and `tests/test_reverse_engineer.py`, expanding test coverage to 421 tests.
+- **Design System (`DESIGN.md`)**: Formal aesthetic direction, color tokens, and contrast specifications.
+- **Accessibility & Mobile**: Touch pan gesture support, WCAG AA color tokens, `<kbd>Ctrl+Enter</kbd>` keyboard shortcut hint, and responsive mobile layout.
+
+### Changed
+- Replaced all bare `except:` clauses with explicit exception tuples.
+- Enforced prompt injection hardening and production error detail masking.
+- Updated Docker Compose to Compose V2 format.
 
 ### Added
 - **Security**: Input sanitization with max length (500 chars) and control character stripping
